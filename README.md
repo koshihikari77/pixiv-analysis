@@ -1,6 +1,6 @@
 # pixiv account analysis collector
 
-複数のpixivアカウントを対象に、投稿メタ・投稿後の伸びスナップショット・フォロワー日次推移を SQLite に収集する最小構成です。  
+複数のpixivアカウントを対象に、投稿メタ・投稿後の伸びスナップショット・フォロワー日次推移を SQLite に収集し、ローカルUIで可視化する構成です。  
 収集後の SQLite (`data/pixiv_stats.db`) は GitHub Actions からコミットされ、履歴として残ります。
 
 ## Features
@@ -12,6 +12,7 @@
 - `daily` / `hourly` / `manual` 実行モード
 - 冪等性重視（UPSERT / INSERT OR IGNORE）
 - 負荷抑制（呼び出し間隔 + ジッター、ページ数制限、詳細取得上限、429時待機）
+- Streamlit UI（フォロワー推移、投稿伸び曲線、最新投稿一覧）
 
 ## Directory
 
@@ -30,9 +31,16 @@
 │  └─ collectors/
 │     ├─ accounts.py
 │     └─ posts.py
+├─ ui/
+│  ├─ app.py
+│  ├─ data_access.py
+│  ├─ transform.py
+│  └─ components.py
 ├─ tests/
 │  ├─ test_config.py
-│  └─ test_db.py
+│  ├─ test_db.py
+│  ├─ test_ui_data_access.py
+│  └─ test_ui_transform.py
 ├─ .env.example
 ├─ pyproject.toml
 ├─ collect.py
@@ -66,13 +74,15 @@ MAX_DETAILS_PER_ACCOUNT=20
 API_MIN_INTERVAL_SEC=1.0
 API_JITTER_SEC=0.3
 TZ=UTC
+UI_DB_PATH=data/pixiv_stats.db
+UI_TZ=UTC
 ```
 
 補足:
 - 既定で `.env` を読み込みます。
 - 別ファイルを使う場合は `ENV_FILE=/path/to/your.env` を指定してください。
 
-## Run
+## Run Collector
 
 - 日次相当の収集:
 
@@ -91,6 +101,17 @@ uv run python collect.py --mode hourly
 ```bash
 uv run python collect.py --mode manual --account-id main
 ```
+
+## Run UI
+
+```bash
+uv run streamlit run ui/app.py
+```
+
+UI内容:
+- Followers: 日次推移と日次増減、減少日一覧
+- Post Growth: 投稿ごとの経過時間ベース成長曲線
+- Latest Posts: 最新投稿と最新スナップショット一覧
 
 ## Test
 
