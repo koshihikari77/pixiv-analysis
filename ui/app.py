@@ -129,7 +129,7 @@ else:
 st.divider()
 st.subheader("Growth Compare (Across Illustrations)")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     benchmark_hours = st.number_input("Target Hours Since Post", value=24.0, min_value=1.0, step=1.0)
 with col2:
@@ -141,9 +141,11 @@ with col2:
 with col3:
     rank_by = st.selectbox(
         "Rank By",
-        options=["metric_per_hour", "metric_value", "bookmark_rate"],
+        options=["metric_per_hour_target", "metric_value", "bookmark_rate", "target_diff_hours"],
         index=0,
     )
+with col4:
+    tolerance_hours = st.number_input("Tolerance (hours)", value=6.0, min_value=0.5, step=0.5)
 
 growth_compare_df = load_growth_benchmark(
     db_path=db_path,
@@ -151,6 +153,7 @@ growth_compare_df = load_growth_benchmark(
     target_hours=float(benchmark_hours),
     metric=benchmark_metric,
     post_type=post_type,
+    tolerance_hours=float(tolerance_hours),
     limit=300,
 )
 growth_compare_df = parse_tags_json(growth_compare_df)
@@ -158,10 +161,22 @@ growth_compare_df = parse_tags_json(growth_compare_df)
 if growth_compare_df.empty:
     st.info("比較用のスナップショットがありません。")
 else:
+    for col in [
+        "bookmark_rate",
+        "elapsed_hours",
+        "metric_per_hour_target",
+        "metric_per_hour_actual",
+        "target_diff_hours",
+        "metric_value",
+    ]:
+        if col in growth_compare_df.columns:
+            growth_compare_df[col] = pd.to_numeric(growth_compare_df[col], errors="coerce")
     growth_compare_df = growth_compare_df.sort_values(rank_by, ascending=False, na_position="last")
     growth_compare_df["bookmark_rate"] = (growth_compare_df["bookmark_rate"] * 100.0).round(2)
     growth_compare_df["elapsed_hours"] = growth_compare_df["elapsed_hours"].round(2)
-    growth_compare_df["metric_per_hour"] = growth_compare_df["metric_per_hour"].round(2)
+    growth_compare_df["metric_per_hour_target"] = growth_compare_df["metric_per_hour_target"].round(2)
+    growth_compare_df["metric_per_hour_actual"] = growth_compare_df["metric_per_hour_actual"].round(2)
+    growth_compare_df["target_diff_hours"] = growth_compare_df["target_diff_hours"].round(2)
     growth_compare_df["metric_value"] = growth_compare_df["metric_value"].round(2)
     show_cols = [
         "account_id",
@@ -170,15 +185,23 @@ else:
         "tags",
         "type",
         "elapsed_hours",
+        "target_diff_hours",
         "metric_value",
-        "metric_per_hour",
+        "metric_per_hour_target",
+        "metric_per_hour_actual",
         "bookmark_rate",
         "bookmark_count",
         "view_count",
         "captured_at",
     ]
     st.dataframe(
-        growth_compare_df[show_cols].rename(columns={"bookmark_rate": "bookmark_rate(%)"}),
+        growth_compare_df[show_cols].rename(
+            columns={
+                "bookmark_rate": "bookmark_rate(%)",
+                "metric_per_hour_target": f"{benchmark_metric}/h@{benchmark_hours:.0f}h",
+                "metric_per_hour_actual": f"{benchmark_metric}/h(actual)",
+            }
+        ),
         width="stretch",
         hide_index=True,
     )
