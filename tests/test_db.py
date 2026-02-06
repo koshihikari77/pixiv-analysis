@@ -15,6 +15,10 @@ def test_init_db_creates_required_tables(tmp_path):
     assert "post_snapshots" in names
     assert "account_daily" in names
 
+    cols = conn.execute("PRAGMA table_info(post_snapshots)").fetchall()
+    col_names = {r["name"] for r in cols}
+    assert "bookmark_rate" in col_names
+
 
 def test_post_snapshot_insert_is_idempotent(tmp_path):
     conn = db.connect_db(str(tmp_path / "test.db"))

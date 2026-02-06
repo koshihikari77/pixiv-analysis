@@ -7,6 +7,16 @@ from src import db
 from src.pixiv_client import PixivClient, extract_post_meta, extract_snapshot
 
 
+def _bookmark_rate(snapshot: dict) -> float | None:
+    bookmarks = snapshot.get("bookmark_count")
+    views = snapshot.get("view_count")
+    if bookmarks is None or views is None:
+        return None
+    if views <= 0:
+        return None
+    return float(bookmarks) / float(views)
+
+
 def _to_utc_iso(raw_datetime: str) -> str:
     parsed = dtparser.isoparse(raw_datetime)
     if parsed.tzinfo is None:
@@ -80,6 +90,7 @@ def sync_posts_and_collect_snapshots(
                 "illust_id": int(illust_id),
                 "captured_at": captured_at,
                 "bookmark_count": snapshot.get("bookmark_count"),
+                "bookmark_rate": _bookmark_rate(snapshot),
                 "like_count": snapshot.get("like_count"),
                 "view_count": snapshot.get("view_count"),
                 "comment_count": snapshot.get("comment_count"),
@@ -116,6 +127,7 @@ def collect_hourly_recent_snapshots(
                 "illust_id": illust_id,
                 "captured_at": captured_at,
                 "bookmark_count": snapshot.get("bookmark_count"),
+                "bookmark_rate": _bookmark_rate(snapshot),
                 "like_count": snapshot.get("like_count"),
                 "view_count": snapshot.get("view_count"),
                 "comment_count": snapshot.get("comment_count"),

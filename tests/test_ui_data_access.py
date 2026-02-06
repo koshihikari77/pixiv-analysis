@@ -35,6 +35,7 @@ def _setup_db(db_path):
             illust_id INTEGER NOT NULL,
             captured_at TEXT NOT NULL,
             bookmark_count INTEGER,
+            bookmark_rate REAL,
             like_count INTEGER,
             view_count INTEGER,
             comment_count INTEGER,
@@ -61,7 +62,7 @@ def _setup_db(db_path):
         "INSERT INTO posts(account_id,illust_id,create_date,tags_json,type,page_count,x_restrict,title,updated_at) VALUES ('main',10,'2026-02-06T00:00:00+00:00','[]','illust',1,0,'t1','2026-02-06T00:00:00+00:00')"
     )
     conn.execute(
-        "INSERT INTO post_snapshots(account_id,illust_id,captured_at,bookmark_count,like_count,view_count,comment_count,source_mode) VALUES ('main',10,'2026-02-06T01:00:00+00:00',1,2,3,4,'daily')"
+        "INSERT INTO post_snapshots(account_id,illust_id,captured_at,bookmark_count,bookmark_rate,like_count,view_count,comment_count,source_mode) VALUES ('main',10,'2026-02-06T01:00:00+00:00',1,0.3333,2,3,4,'daily')"
     )
     conn.commit()
     conn.close()

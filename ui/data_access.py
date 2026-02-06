@@ -1,6 +1,5 @@
 import sqlite3
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
@@ -116,6 +115,7 @@ def load_posts_with_latest_snapshot(
             p.x_restrict,
             rs.captured_at,
             rs.bookmark_count,
+            rs.bookmark_rate,
             rs.like_count,
             rs.view_count,
             rs.comment_count,
@@ -149,6 +149,7 @@ def load_post_snapshots(
                 ps.illust_id,
                 ps.captured_at,
                 ps.bookmark_count,
+                ps.bookmark_rate,
                 ps.like_count,
                 ps.view_count,
                 ps.comment_count,
@@ -165,5 +166,103 @@ def load_post_snapshots(
             conn,
             params=(account_id, illust_id),
         )
+    finally:
+        conn.close()
+
+
+def load_growth_benchmark(
+    db_path: str,
+    account_id: str,
+    target_hours: float,
+    metric: str,
+    post_type: str = "ALL",
+    limit: int = 300,
+) -> pd.DataFrame:
+    metric_map = {
+        "bookmark_count": "ps.bookmark_count",
+        "view_count": "ps.view_count",
+        "like_count": "ps.like_count",
+        "comment_count": "ps.comment_count",
+    }
+    metric_col = metric_map.get(metric, "ps.bookmark_count")
+
+    conn = _connect(db_path)
+    try:
+        where_parts = [f"{metric_col} IS NOT NULL"]
+        params: list = []
+
+        if account_id != "ALL":
+            where_parts.append("p.account_id = ?")
+            params.append(account_id)
+        if post_type != "ALL":
+            where_parts.append("p.type = ?")
+            params.append(post_type)
+
+        where_sql = "WHERE " + " AND ".join(where_parts)
+
+        query = f"""
+        WITH base AS (
+            SELECT
+                p.account_id,
+                p.illust_id,
+                p.title,
+                p.tags_json,
+                p.create_date,
+                p.type,
+                ps.captured_at,
+                ps.bookmark_count,
+                ps.bookmark_rate,
+                ps.like_count,
+                ps.view_count,
+                ps.comment_count,
+                ((julianday(ps.captured_at) - julianday(p.create_date)) * 24.0) AS elapsed_hours,
+                {metric_col} AS metric_value
+            FROM posts p
+            JOIN post_snapshots ps
+              ON p.account_id = ps.account_id
+             AND p.illust_id = ps.illust_id
+            {where_sql}
+        ),
+        ranked AS (
+            SELECT
+                *,
+                ROW_NUMBER() OVER (
+                    PARTITION BY account_id, illust_id
+                    ORDER BY
+                        CASE WHEN elapsed_hours >= ? THEN 0 ELSE 1 END,
+                        CASE
+                            WHEN elapsed_hours >= ? THEN elapsed_hours
+                            ELSE -elapsed_hours
+                        END
+                ) AS rn
+            FROM base
+            WHERE elapsed_hours >= 0
+        )
+        SELECT
+            account_id,
+            illust_id,
+            title,
+            tags_json,
+            create_date,
+            type,
+            captured_at,
+            elapsed_hours,
+            metric_value,
+            bookmark_count,
+            bookmark_rate,
+            view_count,
+            like_count,
+            comment_count,
+            CASE
+                WHEN elapsed_hours > 0 THEN (metric_value / elapsed_hours)
+                ELSE NULL
+            END AS metric_per_hour
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY metric_per_hour DESC
+        LIMIT ?
+        """
+        params.extend([target_hours, target_hours, limit])
+        return pd.read_sql_query(query, conn, params=params)
     finally:
         conn.close()

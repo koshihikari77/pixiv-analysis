@@ -122,14 +122,25 @@ class PixivClient:
 def extract_user_stats(user_detail_response: Any) -> Dict[str, Optional[int]]:
     user = _safe_get(user_detail_response, "user", {})
     profile = _safe_get(user_detail_response, "profile", {})
+    profile_publicity = _safe_get(user_detail_response, "profile_publicity", {})
 
-    followers = _safe_get(profile, "total_follow_users")
-    if followers is None:
-        followers = _safe_get(user, "total_follow_users")
+    follower_candidates = [
+        _safe_get(profile, "total_follow_users"),
+        _safe_get(user, "total_follow_users"),
+        _safe_get(profile, "followers"),
+        _safe_get(user, "followers"),
+        _safe_get(profile_publicity, "total_follow_users"),
+    ]
+    following_candidates = [
+        _safe_get(user, "total_following"),
+        _safe_get(profile, "total_following"),
+        _safe_get(user, "following"),
+        _safe_get(profile, "following"),
+        _safe_get(profile_publicity, "total_following"),
+    ]
 
-    following = _safe_get(user, "total_following")
-    if following is None:
-        following = _safe_get(profile, "total_following")
+    followers = next((v for v in follower_candidates if isinstance(v, int)), None)
+    following = next((v for v in following_candidates if isinstance(v, int)), None)
 
     return {"followers": followers, "following": following}
 

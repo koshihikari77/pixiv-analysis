@@ -1,7 +1,14 @@
 import os
+import sys
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+
+# Ensure project root is importable when launched via `streamlit run ui/app.py`.
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from ui.components import (
     render_follower_charts,
@@ -13,10 +20,17 @@ from ui.data_access import (
     has_required_tables,
     load_accounts,
     load_follower_daily,
+    load_growth_benchmark,
     load_post_snapshots,
     load_posts_with_latest_snapshot,
 )
-from ui.transform import add_follower_delta, mark_follower_decrease, safe_metric_series, to_elapsed_hours_curve
+from ui.transform import (
+    add_follower_delta,
+    mark_follower_decrease,
+    parse_tags_json,
+    safe_metric_series,
+    to_elapsed_hours_curve,
+)
 
 
 st.set_page_config(page_title="Pixiv Analysis UI", layout="wide")
@@ -59,6 +73,11 @@ if not follower_df.empty and days != 9999:
     follower_df = follower_df[follower_df["date"] >= cutoff]
 
 render_follower_charts(follower_df)
+if not follower_df.empty and (follower_df["followers"].fillna(0) == 0).all():
+    st.warning(
+        "followers が全日0です。pixiv APIの返却値が0の可能性があります。"
+        " user_detail のレスポンス確認か user_id の再確認を推奨します。"
+    )
 
 if not follower_df.empty:
     decreases = follower_df[follower_df["is_decrease"]][
@@ -66,7 +85,7 @@ if not follower_df.empty:
     ].copy()
     decreases["date"] = decreases["date"].dt.strftime("%Y-%m-%d")
     st.markdown("**Follower Decrease Days**")
-    st.dataframe(decreases, use_container_width=True, hide_index=True)
+    st.dataframe(decreases, width="stretch", hide_index=True)
 
 st.divider()
 st.subheader("Post Growth")
@@ -80,6 +99,7 @@ posts_df = load_posts_with_latest_snapshot(
     limit=300,
     post_type=post_type,
 )
+posts_df = parse_tags_json(posts_df)
 
 if posts_df.empty:
     st.info("表示できる投稿がありません。")
@@ -107,6 +127,63 @@ else:
     render_growth_curve(metric_df, metric)
 
 st.divider()
+st.subheader("Growth Compare (Across Illustrations)")
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    benchmark_hours = st.number_input("Target Hours Since Post", value=24.0, min_value=1.0, step=1.0)
+with col2:
+    benchmark_metric = st.selectbox(
+        "Benchmark Metric",
+        options=["bookmark_count", "view_count", "like_count", "comment_count"],
+        index=0,
+    )
+with col3:
+    rank_by = st.selectbox(
+        "Rank By",
+        options=["metric_per_hour", "metric_value", "bookmark_rate"],
+        index=0,
+    )
+
+growth_compare_df = load_growth_benchmark(
+    db_path=db_path,
+    account_id=selected_account,
+    target_hours=float(benchmark_hours),
+    metric=benchmark_metric,
+    post_type=post_type,
+    limit=300,
+)
+growth_compare_df = parse_tags_json(growth_compare_df)
+
+if growth_compare_df.empty:
+    st.info("比較用のスナップショットがありません。")
+else:
+    growth_compare_df = growth_compare_df.sort_values(rank_by, ascending=False, na_position="last")
+    growth_compare_df["bookmark_rate"] = (growth_compare_df["bookmark_rate"] * 100.0).round(2)
+    growth_compare_df["elapsed_hours"] = growth_compare_df["elapsed_hours"].round(2)
+    growth_compare_df["metric_per_hour"] = growth_compare_df["metric_per_hour"].round(2)
+    growth_compare_df["metric_value"] = growth_compare_df["metric_value"].round(2)
+    show_cols = [
+        "account_id",
+        "illust_id",
+        "title",
+        "tags",
+        "type",
+        "elapsed_hours",
+        "metric_value",
+        "metric_per_hour",
+        "bookmark_rate",
+        "bookmark_count",
+        "view_count",
+        "captured_at",
+    ]
+    st.dataframe(
+        growth_compare_df[show_cols].rename(columns={"bookmark_rate": "bookmark_rate(%)"}),
+        width="stretch",
+        hide_index=True,
+    )
+
+st.divider()
 st.subheader("Latest Posts")
 
 latest_display = posts_df.copy() if not posts_df.empty else pd.DataFrame()
@@ -115,10 +192,12 @@ if not latest_display.empty:
         "account_id",
         "illust_id",
         "title",
+        "tags",
         "create_date",
         "type",
         "x_restrict",
         "bookmark_count",
+        "bookmark_rate",
         "like_count",
         "view_count",
         "comment_count",
@@ -136,5 +215,6 @@ if not latest_display.empty:
         .dt.tz_convert(_ui_tz())
         .dt.strftime("%Y-%m-%d %H:%M:%S %Z")
     )
+    latest_display["bookmark_rate"] = (pd.to_numeric(latest_display["bookmark_rate"], errors="coerce") * 100.0).round(2)
 
 render_latest_posts_table(latest_display)
