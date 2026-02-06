@@ -4,6 +4,7 @@ from ui.data_access import (
     has_required_tables,
     load_accounts,
     load_follower_daily,
+    load_growth_benchmark,
     load_post_snapshots,
     load_posts_with_latest_snapshot,
 )
@@ -62,7 +63,7 @@ def _setup_db(db_path):
         "INSERT INTO posts(account_id,illust_id,create_date,tags_json,type,page_count,x_restrict,title,updated_at) VALUES ('main',10,'2026-02-06T00:00:00+00:00','[]','illust',1,0,'t1','2026-02-06T00:00:00+00:00')"
     )
     conn.execute(
-        "INSERT INTO post_snapshots(account_id,illust_id,captured_at,bookmark_count,bookmark_rate,like_count,view_count,comment_count,source_mode) VALUES ('main',10,'2026-02-06T01:00:00+00:00',1,0.3333,2,3,4,'daily')"
+        "INSERT INTO post_snapshots(account_id,illust_id,captured_at,bookmark_count,bookmark_rate,like_count,view_count,comment_count,source_mode) VALUES ('main',10,'2026-02-06T01:00:00+00:00',1,NULL,2,4,4,'daily')"
     )
     conn.commit()
     conn.close()
@@ -85,8 +86,20 @@ def test_data_access_queries(tmp_path):
     posts = load_posts_with_latest_snapshot(str(db_path), account_id="main", limit=10)
     assert len(posts) == 1
     assert int(posts.iloc[0]["illust_id"]) == 10
-    assert int(posts.iloc[0]["view_count"]) == 3
+    assert int(posts.iloc[0]["view_count"]) == 4
+    assert float(posts.iloc[0]["bookmark_rate"]) == 0.25
 
     snaps = load_post_snapshots(str(db_path), account_id="main", illust_id=10)
     assert len(snaps) == 1
     assert int(snaps.iloc[0]["bookmark_count"]) == 1
+    assert float(snaps.iloc[0]["bookmark_rate"]) == 0.25
+
+    growth = load_growth_benchmark(
+        str(db_path),
+        account_id="main",
+        target_hours=1.0,
+        metric="bookmark_count",
+        tolerance_hours=1.0,
+    )
+    assert len(growth) == 1
+    assert float(growth.iloc[0]["metric_per_hour_target"]) == 1.0

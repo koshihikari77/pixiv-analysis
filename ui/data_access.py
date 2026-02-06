@@ -115,7 +115,11 @@ def load_posts_with_latest_snapshot(
             p.x_restrict,
             rs.captured_at,
             rs.bookmark_count,
-            rs.bookmark_rate,
+            CASE
+                WHEN rs.bookmark_rate IS NOT NULL THEN rs.bookmark_rate
+                WHEN rs.view_count > 0 THEN (1.0 * rs.bookmark_count / rs.view_count)
+                ELSE NULL
+            END AS bookmark_rate,
             rs.like_count,
             rs.view_count,
             rs.comment_count,
@@ -149,7 +153,11 @@ def load_post_snapshots(
                 ps.illust_id,
                 ps.captured_at,
                 ps.bookmark_count,
-                ps.bookmark_rate,
+                CASE
+                    WHEN ps.bookmark_rate IS NOT NULL THEN ps.bookmark_rate
+                    WHEN ps.view_count > 0 THEN (1.0 * ps.bookmark_count / ps.view_count)
+                    ELSE NULL
+                END AS bookmark_rate,
                 ps.like_count,
                 ps.view_count,
                 ps.comment_count,
@@ -176,6 +184,7 @@ def load_growth_benchmark(
     target_hours: float,
     metric: str,
     post_type: str = "ALL",
+    tolerance_hours: float = 6.0,
     limit: int = 300,
 ) -> pd.DataFrame:
     metric_map = {
@@ -211,7 +220,11 @@ def load_growth_benchmark(
                 p.type,
                 ps.captured_at,
                 ps.bookmark_count,
-                ps.bookmark_rate,
+                CASE
+                    WHEN ps.bookmark_rate IS NOT NULL THEN ps.bookmark_rate
+                    WHEN ps.view_count > 0 THEN (1.0 * ps.bookmark_count / ps.view_count)
+                    ELSE NULL
+                END AS bookmark_rate,
                 ps.like_count,
                 ps.view_count,
                 ps.comment_count,
@@ -229,14 +242,13 @@ def load_growth_benchmark(
                 ROW_NUMBER() OVER (
                     PARTITION BY account_id, illust_id
                     ORDER BY
-                        CASE WHEN elapsed_hours >= ? THEN 0 ELSE 1 END,
-                        CASE
-                            WHEN elapsed_hours >= ? THEN elapsed_hours
-                            ELSE -elapsed_hours
-                        END
+                        ABS(elapsed_hours - ?) ASC,
+                        CASE WHEN elapsed_hours >= ? THEN 0 ELSE 1 END
                 ) AS rn
             FROM base
-            WHERE elapsed_hours >= 0
+            WHERE
+                elapsed_hours >= 0
+                AND ABS(elapsed_hours - ?) <= ?
         )
         SELECT
             account_id,
@@ -254,15 +266,31 @@ def load_growth_benchmark(
             like_count,
             comment_count,
             CASE
+                WHEN ? > 0 THEN (metric_value / ?)
+                ELSE NULL
+            END AS metric_per_hour_target,
+            CASE
                 WHEN elapsed_hours > 0 THEN (metric_value / elapsed_hours)
                 ELSE NULL
-            END AS metric_per_hour
+            END AS metric_per_hour_actual,
+            ABS(elapsed_hours - ?) AS target_diff_hours
         FROM ranked
         WHERE rn = 1
-        ORDER BY metric_per_hour DESC
+        ORDER BY metric_per_hour_target DESC
         LIMIT ?
         """
-        params.extend([target_hours, target_hours, limit])
+        params.extend(
+            [
+                target_hours,
+                target_hours,
+                target_hours,
+                tolerance_hours,
+                target_hours,
+                target_hours,
+                target_hours,
+                limit,
+            ]
+        )
         return pd.read_sql_query(query, conn, params=params)
     finally:
         conn.close()
