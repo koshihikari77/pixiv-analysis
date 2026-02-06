@@ -35,8 +35,8 @@ def render_follower_charts(df: pd.DataFrame) -> None:
         .properties(height=180)
     )
 
-    st.altair_chart(line, use_container_width=True)
-    st.altair_chart(bars, use_container_width=True)
+    st.altair_chart(line, width="stretch")
+    st.altair_chart(bars, width="stretch")
 
 
 def render_growth_curve(df_metric: pd.DataFrame, metric_name: str) -> None:
@@ -54,11 +54,11 @@ def render_growth_curve(df_metric: pd.DataFrame, metric_name: str) -> None:
         )
         .properties(height=280)
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
 
 def render_latest_posts_table(df: pd.DataFrame) -> None:
     if df.empty:
         st.info("投稿データがありません。")
         return
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)

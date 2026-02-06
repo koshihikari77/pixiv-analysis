@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 
 
@@ -50,4 +52,25 @@ def safe_metric_series(df: pd.DataFrame, metric_name: str) -> pd.DataFrame:
     out = out.dropna(subset=["elapsed_hours", metric_name])
     out = out.drop_duplicates(subset=["elapsed_hours"], keep="last")
     out = out.sort_values("elapsed_hours")
+    return out
+
+
+def parse_tags_json(df: pd.DataFrame, col: str = "tags_json") -> pd.DataFrame:
+    if df.empty or col not in df.columns:
+        return df.copy()
+
+    out = df.copy()
+
+    def _parse(raw):
+        if raw is None:
+            return ""
+        try:
+            arr = json.loads(raw)
+            if isinstance(arr, list):
+                return ", ".join(str(x) for x in arr)
+        except Exception:  # noqa: BLE001
+            return str(raw)
+        return str(raw)
+
+    out["tags"] = out[col].map(_parse)
     return out

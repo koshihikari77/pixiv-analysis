@@ -12,7 +12,7 @@
 - `daily` / `hourly` / `manual` 実行モード
 - 冪等性重視（UPSERT / INSERT OR IGNORE）
 - 負荷抑制（呼び出し間隔 + ジッター、ページ数制限、詳細取得上限、429時待機）
-- Streamlit UI（フォロワー推移、投稿伸び曲線、最新投稿一覧）
+- Streamlit UI（フォロワー推移、投稿伸び曲線、投稿間growth比較、最新投稿一覧）
 
 ## Directory
 
@@ -111,7 +111,8 @@ uv run streamlit run ui/app.py
 UI内容:
 - Followers: 日次推移と日次増減、減少日一覧
 - Post Growth: 投稿ごとの経過時間ベース成長曲線
-- Latest Posts: 最新投稿と最新スナップショット一覧
+- Growth Compare: 例 `24h` 時点の投稿間比較（metric値、時間あたり伸び、bookmark_rate）
+- Latest Posts: 最新投稿と最新スナップショット一覧（タグ表示・bookmark_rate表示）
 
 ## Test
 

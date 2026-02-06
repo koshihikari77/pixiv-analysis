@@ -37,6 +37,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             illust_id INTEGER NOT NULL,
             captured_at TEXT NOT NULL,
             bookmark_count INTEGER,
+            bookmark_rate REAL,
             like_count INTEGER,
             view_count INTEGER,
             comment_count INTEGER,
@@ -53,7 +54,15 @@ def init_db(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    _ensure_post_snapshots_migration(conn)
     conn.commit()
+
+
+def _ensure_post_snapshots_migration(conn: sqlite3.Connection) -> None:
+    cols = conn.execute("PRAGMA table_info(post_snapshots)").fetchall()
+    col_names = {r["name"] for r in cols}
+    if "bookmark_rate" not in col_names:
+        conn.execute("ALTER TABLE post_snapshots ADD COLUMN bookmark_rate REAL")
 
 
 def utc_now_iso() -> str:
@@ -115,14 +124,15 @@ def insert_snapshot(conn: sqlite3.Connection, row: Dict) -> None:
     conn.execute(
         """
         INSERT OR IGNORE INTO post_snapshots(
-            account_id, illust_id, captured_at, bookmark_count, like_count, view_count, comment_count, source_mode
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            account_id, illust_id, captured_at, bookmark_count, bookmark_rate, like_count, view_count, comment_count, source_mode
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             row["account_id"],
             row["illust_id"],
             row["captured_at"],
             row.get("bookmark_count"),
+            row.get("bookmark_rate"),
             row.get("like_count"),
             row.get("view_count"),
             row.get("comment_count"),
