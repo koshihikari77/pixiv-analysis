@@ -3,10 +3,7 @@ from pathlib import Path
 
 from src import db
 from src.collectors.accounts import collect_account_daily
-from src.collectors.posts import (
-    collect_hourly_recent_snapshots,
-    sync_posts_and_collect_snapshots,
-)
+from src.collectors.posts import sync_posts_and_collect_snapshots
 from src.config import load_settings
 from src.pixiv_client import PixivClient
 
@@ -15,7 +12,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Pixiv account stats collector")
     parser.add_argument(
         "--mode",
-        choices=["daily", "hourly", "manual"],
+        choices=["daily", "manual"],
         required=True,
         help="Collector mode",
     )
@@ -41,10 +38,6 @@ def main() -> int:
     conn = db.connect_db(settings.db_path)
     db.init_db(conn)
 
-    if args.mode == "hourly" and not settings.enable_hourly:
-        print("Hourly job is disabled by ENABLE_HOURLY=false. Skipping.")
-        return 0
-
     for account in selected_accounts:
         db.upsert_account(conn, account.account_id, account.pixiv_user_id)
         client = PixivClient(
@@ -53,36 +46,23 @@ def main() -> int:
             jitter_sec=settings.api_jitter_sec,
         )
 
-        if args.mode in {"daily", "manual"}:
-            collect_account_daily(
-                conn=conn,
-                client=client,
-                account_id=account.account_id,
-                pixiv_user_id=account.pixiv_user_id,
-            )
-            sync_posts_and_collect_snapshots(
-                conn=conn,
-                client=client,
-                account_id=account.account_id,
-                pixiv_user_id=account.pixiv_user_id,
-                source_mode=args.mode,
-                recent_hours=settings.snapshot_recent_hours,
-                max_pages=settings.user_illusts_max_pages,
-                max_details_per_account=settings.max_details_per_account,
-            )
-            print(f"[{account.account_id}] daily/manual collection done.")
-            continue
-
-        if args.mode == "hourly":
-            snapshot_count = collect_hourly_recent_snapshots(
-                conn=conn,
-                client=client,
-                account_id=account.account_id,
-                recent_hours=settings.snapshot_recent_hours,
-                source_mode="hourly",
-                max_details_per_account=settings.max_details_per_account,
-            )
-            print(f"[{account.account_id}] hourly snapshots: {snapshot_count}")
+        collect_account_daily(
+            conn=conn,
+            client=client,
+            account_id=account.account_id,
+            pixiv_user_id=account.pixiv_user_id,
+        )
+        sync_posts_and_collect_snapshots(
+            conn=conn,
+            client=client,
+            account_id=account.account_id,
+            pixiv_user_id=account.pixiv_user_id,
+            source_mode=args.mode,
+            max_snapshot_age_days=settings.snapshot_max_age_days,
+            max_pages=settings.user_illusts_max_pages,
+            max_details_per_account=settings.max_details_per_account,
+        )
+        print(f"[{account.account_id}] {args.mode} collection done.")
 
     db.commit(conn)
     conn.close()

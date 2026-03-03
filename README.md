@@ -9,9 +9,10 @@
 - 投稿メタ収集（`illust_id`, `create_date`, `tags`, `type`, `page_count`, `x_restrict`）
 - 投稿スナップショット時系列（`captured_at` + 各種カウント）
 - 日次フォロワー記録（`followers`, `following`）
-- `daily` / `hourly` / `manual` 実行モード
+- `daily` / `manual` 実行モード
 - 冪等性重視（UPSERT / INSERT OR IGNORE）
 - 負荷抑制（呼び出し間隔 + ジッター、ページ数制限、詳細取得上限、429時待機）
+- `daily` では投稿から60日以内の作品だけ snapshot を取得
 - Streamlit UI（フォロワー推移、投稿伸び曲線、投稿間growth比較、最新投稿一覧）
 
 ## Directory
@@ -19,8 +20,7 @@
 ```text
 .
 ├─ .github/workflows/
-│  ├─ collect_daily.yml
-│  └─ collect_hourly.yml
+│  └─ collect_daily.yml
 ├─ data/
 │  └─ pixiv_stats.db
 ├─ src/
@@ -40,7 +40,8 @@
 │  ├─ test_config.py
 │  ├─ test_db.py
 │  ├─ test_ui_data_access.py
-│  └─ test_ui_transform.py
+│  ├─ test_ui_transform.py
+│  └─ test_pixiv_client.py
 ├─ .env.example
 ├─ pyproject.toml
 ├─ collect.py
@@ -67,10 +68,9 @@ cp .env.example .env
 ```dotenv
 PIXIV_ACCOUNTS_JSON=[{"account_id":"main","pixiv_user_id":123456,"refresh_token":"YOUR_TOKEN"}]
 DB_PATH=data/pixiv_stats.db
-ENABLE_HOURLY=false
-SNAPSHOT_RECENT_HOURS=24
+SNAPSHOT_MAX_AGE_DAYS=60
 USER_ILLUSTS_MAX_PAGES=3
-MAX_DETAILS_PER_ACCOUNT=20
+MAX_DETAILS_PER_ACCOUNT=200
 API_MIN_INTERVAL_SEC=1.0
 API_JITTER_SEC=0.3
 TZ=UTC
@@ -84,16 +84,10 @@ UI_TZ=UTC
 
 ## Run Collector
 
-- 日次相当の収集:
+- 日次収集:
 
 ```bash
 uv run python collect.py --mode daily
-```
-
-- 毎時相当の収集（`ENABLE_HOURLY=true` の時のみ実行）:
-
-```bash
-uv run python collect.py --mode hourly
 ```
 
 - 手動実行（特定アカウントのみ）:
@@ -101,6 +95,10 @@ uv run python collect.py --mode hourly
 ```bash
 uv run python collect.py --mode manual --account-id main
 ```
+
+収集方針:
+- `posts`: 全投稿のメタを同期
+- `post_snapshots`: 投稿から `SNAPSHOT_MAX_AGE_DAYS` 日以内の作品だけ daily で取得
 
 ## Run UI
 
@@ -126,22 +124,16 @@ uv run pytest
   - 毎日1回 + 手動実行
   - `daily` モードを実行
   - DB変更時のみコミット
-- `collect_hourly.yml`
-  - 毎時 + 手動実行
-  - `hourly` モードを実行
-  - `ENABLE_HOURLY` が `false` ならスキップ
-  - DB変更時のみコミット
 
 ### Required secrets
 
 - `PIXIV_ACCOUNTS_JSON` (必須)
-- `ENABLE_HOURLY` (任意。未設定時は `false`)
 
 ## Database schema
 
 - `accounts(account_id, pixiv_user_id, updated_at)`
 - `posts(account_id, illust_id, create_date, tags_json, type, page_count, x_restrict, title, updated_at)`
-- `post_snapshots(account_id, illust_id, captured_at, bookmark_count, like_count, view_count, comment_count, source_mode)`
+- `post_snapshots(account_id, illust_id, captured_at, bookmark_count, bookmark_rate, like_count, view_count, comment_count, source_mode)`
 - `account_daily(account_id, date, followers, following, captured_at)`
 
 ## Notes

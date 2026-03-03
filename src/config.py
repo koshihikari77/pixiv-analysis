@@ -21,8 +21,7 @@ class AccountsPayload(RootModel[List[AccountModel]]):
 class Settings:
     accounts: List[AccountModel]
     db_path: str
-    enable_hourly: bool
-    snapshot_recent_hours: int
+    snapshot_max_age_days: int
     user_illusts_max_pages: int
     max_details_per_account: int
     api_min_interval_sec: float
@@ -51,10 +50,9 @@ def load_settings() -> Settings:
         raise ValueError("PIXIV_ACCOUNTS_JSON is invalid JSON payload.") from exc
 
     db_path = os.environ.get("DB_PATH", "data/pixiv_stats.db")
-    enable_hourly = _parse_bool(os.environ.get("ENABLE_HOURLY"), default=False)
-    snapshot_recent_hours = int(os.environ.get("SNAPSHOT_RECENT_HOURS", "24"))
+    snapshot_max_age_days = int(os.environ.get("SNAPSHOT_MAX_AGE_DAYS", "60"))
     user_illusts_max_pages = int(os.environ.get("USER_ILLUSTS_MAX_PAGES", "3"))
-    max_details_per_account = int(os.environ.get("MAX_DETAILS_PER_ACCOUNT", "20"))
+    max_details_per_account = int(os.environ.get("MAX_DETAILS_PER_ACCOUNT", "200"))
     api_min_interval_sec = float(os.environ.get("API_MIN_INTERVAL_SEC", "1.0"))
     api_jitter_sec = float(os.environ.get("API_JITTER_SEC", "0.3"))
     tz = os.environ.get("TZ", "UTC")
@@ -62,8 +60,7 @@ def load_settings() -> Settings:
     return Settings(
         accounts=payload.root,
         db_path=db_path,
-        enable_hourly=enable_hourly,
-        snapshot_recent_hours=snapshot_recent_hours,
+        snapshot_max_age_days=snapshot_max_age_days,
         user_illusts_max_pages=user_illusts_max_pages,
         max_details_per_account=max_details_per_account,
         api_min_interval_sec=api_min_interval_sec,

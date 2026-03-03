@@ -29,9 +29,9 @@ jobs:
         env:
           PIXIV_ACCOUNTS_JSON: ${{ secrets.PIXIV_ACCOUNTS_JSON }}
           DB_PATH: data/pixiv_stats.db
-          SNAPSHOT_RECENT_HOURS: "24"
+          SNAPSHOT_MAX_AGE_DAYS: "60"
           USER_ILLUSTS_MAX_PAGES: "3"
-          MAX_DETAILS_PER_ACCOUNT: "20"
+          MAX_DETAILS_PER_ACCOUNT: "200"
           API_MIN_INTERVAL_SEC: "1.0"
           API_JITTER_SEC: "0.3"
           TZ: UTC

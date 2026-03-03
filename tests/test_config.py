@@ -9,8 +9,7 @@ def test_load_settings_parses_accounts_json(monkeypatch):
         '[{"account_id":"main","pixiv_user_id":123,"refresh_token":"token"}]',
     )
     monkeypatch.setenv("DB_PATH", "data/test.db")
-    monkeypatch.setenv("ENABLE_HOURLY", "true")
-    monkeypatch.setenv("SNAPSHOT_RECENT_HOURS", "12")
+    monkeypatch.setenv("SNAPSHOT_MAX_AGE_DAYS", "60")
     monkeypatch.setenv("USER_ILLUSTS_MAX_PAGES", "2")
     monkeypatch.setenv("MAX_DETAILS_PER_ACCOUNT", "15")
     monkeypatch.setenv("API_MIN_INTERVAL_SEC", "1.1")
@@ -20,8 +19,7 @@ def test_load_settings_parses_accounts_json(monkeypatch):
     settings = load_settings()
 
     assert settings.db_path == "data/test.db"
-    assert settings.enable_hourly is True
-    assert settings.snapshot_recent_hours == 12
+    assert settings.snapshot_max_age_days == 60
     assert settings.user_illusts_max_pages == 2
     assert settings.max_details_per_account == 15
     assert settings.api_min_interval_sec == 1.1
