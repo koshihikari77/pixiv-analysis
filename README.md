@@ -121,6 +121,11 @@ uv run python import_prompts.py --root /path/to/assets --account-id main
 
 `--account-id` を省略した場合は、`<root>/<account_id>/...` の先頭ディレクトリ名を使います。
 
+仮の投稿紐づけは `data/prompt_post_links.json` に保存しています。
+- 強く一致したものだけ Pixiv 投稿IDを入れています
+- 曖昧なものは `candidate_pixiv_illust_id: null` のままです
+- 後で手で修正しやすい形式にしています
+
 ## Run UI
 
 ```bash
