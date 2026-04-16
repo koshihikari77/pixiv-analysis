@@ -10,7 +10,7 @@ from PIL import ExifTags, Image
 
 from src import db
 
-SUPPORTED_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
+DEFAULT_SUFFIXES = {".png"}
 PROMPT_KEY_HINTS = {
     "prompt",
     "parameters",
@@ -60,6 +60,52 @@ def _stringify(value: Any) -> Any:
     return str(value)
 
 
+def _looks_like_negative_prompt(text: str) -> bool:
+    lowered = text.lower()
+    negative_markers = [
+        "worst quality",
+        "low quality",
+        "bad",
+        "jpeg artifacts",
+        "watermark",
+        "signature",
+    ]
+    return any(marker in lowered for marker in negative_markers)
+
+
+def _extract_text_from_workflow(workflow: dict[str, Any]) -> tuple[str | None, str | None]:
+    preferred_node_ids = ("275", "0")
+    for node_id in preferred_node_ids:
+        node = workflow.get(node_id)
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs")
+        if not isinstance(inputs, dict):
+            continue
+        text = inputs.get("text")
+        if isinstance(text, str) and text.strip():
+            return text.strip(), f"workflow:{node_id}.inputs.text"
+
+    candidates: list[tuple[str, str]] = []
+    for node_id, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs")
+        if not isinstance(inputs, dict):
+            continue
+        text = inputs.get("text")
+        if isinstance(text, str):
+            stripped = text.strip()
+            if stripped and not _looks_like_negative_prompt(stripped):
+                candidates.append((stripped, f"workflow:{node_id}.inputs.text"))
+
+    if candidates:
+        candidates.sort(key=lambda item: len(item[0]), reverse=True)
+        return candidates[0]
+
+    return None, None
+
+
 def _load_image_metadata(path: Path) -> dict[str, Any]:
     metadata: dict[str, Any] = {}
     with Image.open(path) as img:
@@ -88,6 +134,16 @@ def _extract_prompt_text(metadata: dict[str, Any]) -> tuple[str | None, str | No
         normalized = _normalize_key(key)
         if normalized in PROMPT_KEY_HINTS:
             text = str(value).strip()
+            if not text:
+                continue
+            try:
+                parsed = json.loads(text)
+            except Exception:  # noqa: BLE001
+                parsed = None
+            if isinstance(parsed, dict):
+                extracted, extracted_key = _extract_text_from_workflow(parsed)
+                if extracted:
+                    return extracted, extracted_key
             if text:
                 return text, key
         if prompt_fallback == (None, None) and normalized.endswith("prompt"):
@@ -121,10 +177,13 @@ def import_prompt_assets(
     conn,
     root_dir: str,
     account_id: str | None = None,
+    suffixes: set[str] | None = None,
 ) -> dict[str, int]:
     root = Path(root_dir)
     if not root.exists():
         raise FileNotFoundError(f"Prompt asset directory not found: {root}")
+
+    effective_suffixes = {s.lower() for s in (suffixes or DEFAULT_SUFFIXES)}
 
     summary = {
         "seen": 0,
@@ -140,7 +199,7 @@ def import_prompt_assets(
         if not path.is_file():
             continue
         summary["seen"] += 1
-        if path.suffix.lower() not in SUPPORTED_SUFFIXES:
+        if path.suffix.lower() not in effective_suffixes:
             summary["skipped_unsupported"] += 1
             continue
 

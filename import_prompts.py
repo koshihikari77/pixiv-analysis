@@ -14,6 +14,11 @@ def _parse_args() -> argparse.Namespace:
         help="Optional account_id to apply to all images. If omitted, the first directory segment is used.",
     )
     parser.add_argument(
+        "--extensions",
+        default="png",
+        help="Comma-separated file extensions to import, e.g. png or png,jpg",
+    )
+    parser.add_argument(
         "--db-path",
         default=os.environ.get("DB_PATH", "data/pixiv_stats.db"),
         help="SQLite database path",
@@ -25,7 +30,13 @@ def main() -> int:
     args = _parse_args()
     conn = db.connect_db(args.db_path)
     db.init_db(conn)
-    summary = import_prompt_assets(conn, root_dir=args.root, account_id=args.account_id)
+    suffixes = {f".{ext.strip().lower().lstrip('.')}" for ext in args.extensions.split(",") if ext.strip()}
+    summary = import_prompt_assets(
+        conn,
+        root_dir=args.root,
+        account_id=args.account_id,
+        suffixes=suffixes,
+    )
     db.commit(conn)
     conn.close()
     print(
