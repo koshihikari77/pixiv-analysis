@@ -8,6 +8,7 @@
 - 複数アカウント対応（`account_id` で分離）
 - 投稿メタ収集（`illust_id`, `create_date`, `tags`, `type`, `page_count`, `x_restrict`）
 - 投稿スナップショット時系列（`captured_at` + 各種カウント）
+- ローカル画像メタデータからの prompt 取り込み（`prompt_assets`）
 - 日次フォロワー記録（`followers`, `following`）
 - `daily` / `manual` 実行モード
 - 冪等性重視（UPSERT / INSERT OR IGNORE）
@@ -31,7 +32,8 @@
 │  ├─ main.py
 │  └─ collectors/
 │     ├─ accounts.py
-│     └─ posts.py
+│     ├─ posts.py
+│     └─ prompt_assets.py
 ├─ ui/
 │  ├─ app.py
 │  ├─ data_access.py
@@ -46,6 +48,7 @@
 ├─ .env.example
 ├─ pyproject.toml
 ├─ collect.py
+├─ import_prompts.py
 └─ requirements.txt
 ```
 
@@ -101,6 +104,23 @@ uv run python collect.py --mode manual --account-id main
 - `posts`: 全投稿のメタを同期
 - `post_snapshots`: 投稿から `SNAPSHOT_MAX_AGE_DAYS` 日以内の作品だけ daily で取得
 
+## Import Local Prompts
+
+ローカル画像のメタデータに入っている prompt を `prompt_assets` テーブルに取り込めます。
+
+前提:
+- 画像メタデータに `prompt` もしくは類似キーが入っていること
+- `illust_id` がメタデータ内にあるか、ファイル名に数値 ID が含まれていること
+- `account_id` は `--account-id` で明示するか、`<root>/<account_id>/...` の階層にすること
+
+実行例:
+
+```bash
+uv run python import_prompts.py --root /path/to/assets --account-id main
+```
+
+`--account-id` を省略した場合は、`<root>/<account_id>/...` の先頭ディレクトリ名を使います。
+
 ## Run UI
 
 ```bash
@@ -140,6 +160,7 @@ uv run pytest
 - `posts(account_id, illust_id, create_date, tags_json, type, page_count, x_restrict, title, updated_at)`
 - `post_snapshots(account_id, illust_id, captured_at, bookmark_count, bookmark_rate, like_count, view_count, comment_count, source_mode)`
 - `account_daily(account_id, date, followers, following, captured_at)`
+- `prompt_assets(account_id, illust_id, local_path, prompt_text, source_key, metadata_json, imported_at)`
 
 ## Notes
 

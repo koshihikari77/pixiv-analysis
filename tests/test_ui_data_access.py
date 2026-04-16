@@ -51,6 +51,16 @@ def _setup_db(db_path):
             captured_at TEXT NOT NULL,
             PRIMARY KEY (account_id, date)
         );
+        CREATE TABLE prompt_assets (
+            account_id TEXT NOT NULL,
+            illust_id INTEGER NOT NULL,
+            local_path TEXT NOT NULL,
+            prompt_text TEXT,
+            source_key TEXT,
+            metadata_json TEXT NOT NULL,
+            imported_at TEXT NOT NULL,
+            PRIMARY KEY (account_id, illust_id, local_path)
+        );
         """
     )
     conn.execute(
@@ -64,6 +74,9 @@ def _setup_db(db_path):
     )
     conn.execute(
         "INSERT INTO post_snapshots(account_id,illust_id,captured_at,bookmark_count,bookmark_rate,like_count,view_count,comment_count,source_mode) VALUES ('main',10,'2026-02-06T01:00:00+00:00',1,NULL,2,4,4,'daily')"
+    )
+    conn.execute(
+        "INSERT INTO prompt_assets(account_id,illust_id,local_path,prompt_text,source_key,metadata_json,imported_at) VALUES ('main',10,'/tmp/10.png','a test prompt','prompt','{}','2026-02-06T01:00:00+00:00')"
     )
     conn.commit()
     conn.close()
@@ -88,11 +101,13 @@ def test_data_access_queries(tmp_path):
     assert int(posts.iloc[0]["illust_id"]) == 10
     assert int(posts.iloc[0]["view_count"]) == 4
     assert float(posts.iloc[0]["bookmark_rate"]) == 0.25
+    assert posts.iloc[0]["prompt_text"] == "a test prompt"
 
     snaps = load_post_snapshots(str(db_path), account_id="main", illust_id=10)
     assert len(snaps) == 1
     assert int(snaps.iloc[0]["bookmark_count"]) == 1
     assert float(snaps.iloc[0]["bookmark_rate"]) == 0.25
+    assert snaps.iloc[0]["prompt_text"] == "a test prompt"
 
     growth = load_growth_benchmark(
         str(db_path),

@@ -110,6 +110,8 @@ else:
     )
     selected_label = st.selectbox("Post", options=posts_df["label"].tolist(), index=0)
     selected_row = posts_df[posts_df["label"] == selected_label].iloc[0]
+    if pd.notna(selected_row.get("prompt_text")) and str(selected_row.get("prompt_text")).strip():
+        st.caption(f"Prompt: {selected_row.get('prompt_text')}")
 
     metric = st.radio(
         "Metric",
@@ -183,6 +185,7 @@ else:
         "illust_id",
         "title",
         "tags",
+        "prompt_text",
         "type",
         "elapsed_hours",
         "target_diff_hours",
@@ -216,6 +219,7 @@ if not latest_display.empty:
         "illust_id",
         "title",
         "tags",
+        "prompt_text",
         "create_date",
         "type",
         "x_restrict",

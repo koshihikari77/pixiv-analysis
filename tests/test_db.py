@@ -14,6 +14,7 @@ def test_init_db_creates_required_tables(tmp_path):
     assert "posts" in names
     assert "post_snapshots" in names
     assert "account_daily" in names
+    assert "prompt_assets" in names
 
     cols = conn.execute("PRAGMA table_info(post_snapshots)").fetchall()
     col_names = {r["name"] for r in cols}
@@ -71,3 +72,34 @@ def test_account_daily_upsert_updates_same_day(tmp_path):
     ).fetchone()
     assert row["followers"] == 95
     assert row["following"] == 50
+
+
+def test_prompt_asset_upsert_updates_same_path(tmp_path):
+    conn = db.connect_db(str(tmp_path / "test.db"))
+    db.init_db(conn)
+
+    row = {
+        "account_id": "main",
+        "illust_id": 101,
+        "local_path": "/tmp/a.png",
+        "prompt_text": "first prompt",
+        "source_key": "prompt",
+        "metadata_json": "{}",
+        "imported_at": "2026-02-06T01:00:00+00:00",
+    }
+    db.upsert_prompt_asset(conn, row)
+    db.upsert_prompt_asset(
+        conn,
+        {
+            **row,
+            "prompt_text": "updated prompt",
+            "imported_at": "2026-02-06T02:00:00+00:00",
+        },
+    )
+    db.commit(conn)
+
+    stored = conn.execute(
+        "SELECT prompt_text, imported_at FROM prompt_assets WHERE account_id='main' AND illust_id=101 AND local_path='/tmp/a.png'"
+    ).fetchone()
+    assert stored["prompt_text"] == "updated prompt"
+    assert stored["imported_at"] == "2026-02-06T02:00:00+00:00"

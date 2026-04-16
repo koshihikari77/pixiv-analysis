@@ -52,6 +52,16 @@ def init_db(conn: sqlite3.Connection) -> None:
             captured_at TEXT NOT NULL,
             PRIMARY KEY (account_id, date)
         );
+        CREATE TABLE IF NOT EXISTS prompt_assets (
+            account_id TEXT NOT NULL,
+            illust_id INTEGER NOT NULL,
+            local_path TEXT NOT NULL,
+            prompt_text TEXT,
+            source_key TEXT,
+            metadata_json TEXT NOT NULL,
+            imported_at TEXT NOT NULL,
+            PRIMARY KEY (account_id, illust_id, local_path)
+        );
         """
     )
     _ensure_post_snapshots_migration(conn)
@@ -159,6 +169,31 @@ def upsert_account_daily(
             captured_at=excluded.captured_at
         """,
         (account_id, date_yyyy_mm_dd, followers, following, captured_at),
+    )
+
+
+def upsert_prompt_asset(conn: sqlite3.Connection, row: Dict) -> None:
+    conn.execute(
+        """
+        INSERT INTO prompt_assets(
+            account_id, illust_id, local_path, prompt_text, source_key, metadata_json, imported_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(account_id, illust_id, local_path) DO UPDATE SET
+            prompt_text=excluded.prompt_text,
+            source_key=excluded.source_key,
+            metadata_json=excluded.metadata_json,
+            imported_at=excluded.imported_at
+        """,
+        (
+            row["account_id"],
+            row["illust_id"],
+            row["local_path"],
+            row.get("prompt_text"),
+            row.get("source_key"),
+            row["metadata_json"],
+            row.get("imported_at", utc_now_iso()),
+        ),
     )
 
 

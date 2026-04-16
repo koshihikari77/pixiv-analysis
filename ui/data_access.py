@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 
 
-REQUIRED_TABLES = {"accounts", "posts", "post_snapshots", "account_daily"}
+REQUIRED_TABLES = {"accounts", "posts", "post_snapshots", "account_daily", "prompt_assets"}
 
 
 def _connect(db_path: str) -> sqlite3.Connection:
@@ -20,9 +20,7 @@ def db_exists(db_path: str) -> bool:
 def has_required_tables(db_path: str) -> bool:
     conn = _connect(db_path)
     try:
-        rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         names = {r["name"] for r in rows}
         return REQUIRED_TABLES.issubset(names)
     finally:
@@ -71,6 +69,20 @@ def load_follower_daily(db_path: str, account_id: str) -> pd.DataFrame:
         conn.close()
 
 
+def _prompt_assets_cte() -> str:
+    return """
+        , ranked_prompts AS (
+            SELECT
+                pa.*,
+                ROW_NUMBER() OVER (
+                    PARTITION BY pa.account_id, pa.illust_id
+                    ORDER BY pa.imported_at DESC, pa.local_path ASC
+                ) AS rn
+            FROM prompt_assets pa
+        )
+    """
+
+
 def load_posts_with_latest_snapshot(
     db_path: str,
     account_id: str,
@@ -104,6 +116,7 @@ def load_posts_with_latest_snapshot(
                 ) AS rn
             FROM post_snapshots ps
         )
+        {_prompt_assets_cte()}
         SELECT
             p.account_id,
             p.illust_id,
@@ -123,12 +136,19 @@ def load_posts_with_latest_snapshot(
             rs.like_count,
             rs.view_count,
             rs.comment_count,
-            rs.source_mode
+            rs.source_mode,
+            rp.prompt_text,
+            rp.source_key,
+            rp.local_path AS prompt_local_path
         FROM posts p
         LEFT JOIN ranked_snapshots rs
             ON p.account_id = rs.account_id
             AND p.illust_id = rs.illust_id
             AND rs.rn = 1
+        LEFT JOIN ranked_prompts rp
+            ON p.account_id = rp.account_id
+            AND p.illust_id = rp.illust_id
+            AND rp.rn = 1
         {where_sql}
         ORDER BY p.create_date DESC
         LIMIT ?
@@ -147,7 +167,16 @@ def load_post_snapshots(
     conn = _connect(db_path)
     try:
         return pd.read_sql_query(
-            """
+            f"""
+            WITH ranked_prompts AS (
+                SELECT
+                    pa.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY pa.account_id, pa.illust_id
+                        ORDER BY pa.imported_at DESC, pa.local_path ASC
+                    ) AS rn
+                FROM prompt_assets pa
+            )
             SELECT
                 ps.account_id,
                 ps.illust_id,
@@ -163,11 +192,18 @@ def load_post_snapshots(
                 ps.comment_count,
                 ps.source_mode,
                 p.create_date,
-                p.title
+                p.title,
+                rp.prompt_text,
+                rp.source_key,
+                rp.local_path AS prompt_local_path
             FROM post_snapshots ps
             JOIN posts p
               ON p.account_id = ps.account_id
              AND p.illust_id = ps.illust_id
+            LEFT JOIN ranked_prompts rp
+              ON rp.account_id = ps.account_id
+             AND rp.illust_id = ps.illust_id
+             AND rp.rn = 1
             WHERE ps.account_id = ? AND ps.illust_id = ?
             ORDER BY ps.captured_at ASC
             """,
@@ -250,32 +286,40 @@ def load_growth_benchmark(
                 elapsed_hours >= 0
                 AND ABS(elapsed_hours - ?) <= ?
         )
+        {_prompt_assets_cte()}
         SELECT
-            account_id,
-            illust_id,
-            title,
-            tags_json,
-            create_date,
-            type,
-            captured_at,
-            elapsed_hours,
-            metric_value,
-            bookmark_count,
-            bookmark_rate,
-            view_count,
-            like_count,
-            comment_count,
+            ranked.account_id,
+            ranked.illust_id,
+            ranked.title,
+            ranked.tags_json,
+            ranked.create_date,
+            ranked.type,
+            ranked.captured_at,
+            ranked.elapsed_hours,
+            ranked.metric_value,
+            ranked.bookmark_count,
+            ranked.bookmark_rate,
+            ranked.view_count,
+            ranked.like_count,
+            ranked.comment_count,
             CASE
-                WHEN ? > 0 THEN (metric_value / ?)
+                WHEN ? > 0 THEN (ranked.metric_value / ?)
                 ELSE NULL
             END AS metric_per_hour_target,
             CASE
-                WHEN elapsed_hours > 0 THEN (metric_value / elapsed_hours)
+                WHEN ranked.elapsed_hours > 0 THEN (ranked.metric_value / ranked.elapsed_hours)
                 ELSE NULL
             END AS metric_per_hour_actual,
-            ABS(elapsed_hours - ?) AS target_diff_hours
+            ABS(ranked.elapsed_hours - ?) AS target_diff_hours,
+            rp.prompt_text,
+            rp.source_key,
+            rp.local_path AS prompt_local_path
         FROM ranked
-        WHERE rn = 1
+        LEFT JOIN ranked_prompts rp
+          ON ranked.account_id = rp.account_id
+         AND ranked.illust_id = rp.illust_id
+         AND rp.rn = 1
+        WHERE ranked.rn = 1
         ORDER BY metric_per_hour_target DESC
         LIMIT ?
         """
