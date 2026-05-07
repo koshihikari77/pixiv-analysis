@@ -121,10 +121,33 @@ uv run python import_prompts.py --root /path/to/assets --account-id main
 
 `--account-id` を省略した場合は、`<root>/<account_id>/...` の先頭ディレクトリ名を使います。
 
-仮の投稿紐づけは `data/prompt_post_links.json` に保存しています。
-- 強く一致したものだけ Pixiv 投稿IDを入れています
-- 曖昧なものは `candidate_pixiv_illust_id: null` のままです
-- 後で手で修正しやすい形式にしています
+仮の投稿紐づけは `data/prompt_post_links.main.json` と `data/prompt_post_links.sub2.json` に保存しています。
+- `main` と `sub2` で別ファイルです
+- `posts` 配下に Pixiv 投稿を全部列挙します
+- 各投稿の `local_images` は手で編集します
+- 未紐づけ画像は `data/prompt_post_links.unmatched.json` に分離します
+- `local_images` の指定ルール:
+- フォルダ指定: そのフォルダ配下の画像すべて
+- 画像単体指定: その画像のみ
+- 連番指定: `folder/0001.png-0003.png` のように、同一フォルダ内の並び順で範囲展開
+- typo や空指定は `apply_prompt_links.py` がエラーにします
+
+JSON のイメージ:
+
+```json
+{
+  "account_id": "akira",
+  "posts": [
+    {
+      "pixiv_account_id": "sub2",
+      "pixiv_illust_id": 143554187,
+      "title": "巨乳ボーイッシュな陸上部ちゃんと部室でえっち",
+      "local_images": ["20260413_ボーイッシュ部室/png"]
+    }
+  ],
+  "unmatched_local_images": []
+}
+```
 
 ## Run UI
 

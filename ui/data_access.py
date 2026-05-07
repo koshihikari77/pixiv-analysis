@@ -75,10 +75,11 @@ def _prompt_assets_cte() -> str:
             SELECT
                 pa.*,
                 ROW_NUMBER() OVER (
-                    PARTITION BY pa.account_id, pa.illust_id
+                    PARTITION BY pa.pixiv_illust_id
                     ORDER BY pa.imported_at DESC, pa.local_path ASC
                 ) AS rn
             FROM prompt_assets pa
+            WHERE pa.pixiv_illust_id IS NOT NULL
         )
     """
 
@@ -146,8 +147,7 @@ def load_posts_with_latest_snapshot(
             AND p.illust_id = rs.illust_id
             AND rs.rn = 1
         LEFT JOIN ranked_prompts rp
-            ON p.account_id = rp.account_id
-            AND p.illust_id = rp.illust_id
+            ON p.illust_id = rp.pixiv_illust_id
             AND rp.rn = 1
         {where_sql}
         ORDER BY p.create_date DESC
@@ -201,8 +201,7 @@ def load_post_snapshots(
               ON p.account_id = ps.account_id
              AND p.illust_id = ps.illust_id
             LEFT JOIN ranked_prompts rp
-              ON rp.account_id = ps.account_id
-             AND rp.illust_id = ps.illust_id
+              ON rp.pixiv_illust_id = ps.illust_id
              AND rp.rn = 1
             WHERE ps.account_id = ? AND ps.illust_id = ?
             ORDER BY ps.captured_at ASC
@@ -316,8 +315,7 @@ def load_growth_benchmark(
             rp.local_path AS prompt_local_path
         FROM ranked
         LEFT JOIN ranked_prompts rp
-          ON ranked.account_id = rp.account_id
-         AND ranked.illust_id = rp.illust_id
+          ON ranked.illust_id = rp.pixiv_illust_id
          AND rp.rn = 1
         WHERE ranked.rn = 1
         ORDER BY metric_per_hour_target DESC

@@ -28,6 +28,18 @@ ILLUST_ID_KEY_HINTS = {
     "postid",
     "illust",
 }
+MODEL_KEY_HINTS = {
+    "ckptname",
+    "checkpointname",
+    "modelname",
+    "basemodel",
+    "sdmodel",
+}
+LORA_KEY_HINTS = {
+    "loraname",
+    "loras",
+    "lorastack",
+}
 
 
 def _utc_now_iso() -> str:
@@ -104,6 +116,70 @@ def _extract_text_from_workflow(workflow: dict[str, Any]) -> tuple[str | None, s
         return candidates[0]
 
     return None, None
+
+
+def _iter_metadata_sources(metadata: dict[str, Any]) -> Iterable[tuple[str, Any]]:
+    yielded_json_roots = False
+    for key, value in metadata.items():
+        yield key, value
+        if not isinstance(value, str):
+            continue
+        text = value.strip()
+        if not text or text[0] not in "[{":
+            continue
+        try:
+            parsed = json.loads(text)
+        except Exception:  # noqa: BLE001
+            continue
+        yield key, parsed
+        if key == "prompt" and isinstance(parsed, dict):
+            yielded_json_roots = True
+    if not yielded_json_roots:
+        prompt_value = metadata.get("prompt")
+        if isinstance(prompt_value, dict):
+            yield "prompt", prompt_value
+
+
+def _looks_like_model_filename(text: str) -> bool:
+    lowered = text.lower()
+    return lowered.endswith((".safetensors", ".ckpt", ".pt", ".pth", ".bin"))
+
+
+def _extract_model_and_loras(metadata: dict[str, Any]) -> tuple[str | None, list[str]]:
+    models: list[str] = []
+    loras: list[str] = []
+
+    def add_unique(target: list[str], value: str) -> None:
+        stripped = value.strip()
+        if not stripped or stripped in target:
+            return
+        target.append(stripped)
+
+    for source_key, source_value in _iter_metadata_sources(metadata):
+        for key, value in _iter_metadata_pairs(source_value, source_key if isinstance(source_value, dict) else ""):
+            if value is None:
+                continue
+            normalized = _normalize_key(key)
+            text = str(value).strip()
+            if not text:
+                continue
+
+            if normalized in MODEL_KEY_HINTS or normalized.endswith("ckptname") or normalized.endswith("checkpointname"):
+                add_unique(models, text)
+                continue
+
+            if normalized in LORA_KEY_HINTS or "loraname" in normalized:
+                if text.lower() != "none":
+                    add_unique(loras, text)
+                continue
+
+            if _looks_like_model_filename(text):
+                if "lora" in normalized or "loraname" in normalized:
+                    add_unique(loras, text)
+                elif any(token in normalized for token in ("ckpt", "checkpoint", "model")):
+                    add_unique(models, text)
+
+    return (models[0] if models else None, loras)
 
 
 def _load_image_metadata(path: Path) -> dict[str, Any]:
@@ -214,6 +290,7 @@ def import_prompt_assets(
         try:
             metadata = _load_image_metadata(path)
             prompt_text, source_key = _extract_prompt_text(metadata)
+            model_name, loras = _extract_model_and_loras(metadata)
             illust_id = _extract_illust_id(metadata, path)
             if not prompt_text:
                 summary["skipped_no_prompt"] += 1
@@ -230,6 +307,8 @@ def import_prompt_assets(
                     "local_path": str(path.resolve()),
                     "prompt_text": prompt_text,
                     "source_key": source_key,
+                    "model_name": model_name,
+                    "loras_json": json.dumps(loras, ensure_ascii=False),
                     "metadata_json": json.dumps(metadata, ensure_ascii=False),
                     "imported_at": _utc_now_iso(),
                 },

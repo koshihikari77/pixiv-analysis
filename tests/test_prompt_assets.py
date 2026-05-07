@@ -33,12 +33,14 @@ def test_import_prompt_assets_reads_png_metadata(tmp_path):
     assert summary['imported'] == 1
 
     row = sqlite3.connect(db_path).execute(
-        "SELECT account_id, illust_id, prompt_text, source_key FROM prompt_assets"
+        "SELECT account_id, illust_id, prompt_text, source_key, model_name, loras_json FROM prompt_assets"
     ).fetchone()
     assert row[0] == 'main'
     assert row[1] == 123
     assert row[2] == 'a prompt from metadata'
     assert row[3] == 'prompt'
+    assert row[4] is None
+    assert row[5] == '[]'
 
 
 def test_import_prompt_assets_extracts_comfyui_prompt_text(tmp_path):
@@ -53,6 +55,16 @@ def test_import_prompt_assets_extracts_comfyui_prompt_text(tmp_path):
     img = Image.new('RGB', (2, 2), color='white')
     meta = PngImagePlugin.PngInfo()
     workflow = {
+        '10': {'inputs': {'ckpt_name': 'animagine-xl-v4.safetensors'}, 'class_type': 'CheckpointLoaderSimple'},
+        '54': {
+            'inputs': {
+                'switch_1': 'On',
+                'lora_name_1': 'Expressive_H-000001.safetensors',
+                'switch_2': 'On',
+                'lora_name_2': 'another_style.safetensors',
+            },
+            'class_type': 'CR Apply LoRA Stack',
+        },
         '275': {'inputs': {'text': '1girl, black hair, masterpiece', 'clip': ['223', 0]}, 'class_type': 'PCTextEncode'},
         '276': {'inputs': {'text': '(bad), worst quality, low quality', 'clip': ['223', 1]}, 'class_type': 'PCTextEncode'},
     }
@@ -66,7 +78,9 @@ def test_import_prompt_assets_extracts_comfyui_prompt_text(tmp_path):
     assert summary['imported'] == 1
 
     row = sqlite3.connect(db_path).execute(
-        "SELECT prompt_text, source_key FROM prompt_assets WHERE account_id='akira' AND illust_id=5545"
+        "SELECT prompt_text, source_key, model_name, loras_json FROM prompt_assets WHERE account_id='akira' AND illust_id=5545"
     ).fetchone()
     assert row[0] == '1girl, black hair, masterpiece'
     assert row[1] == 'workflow:275.inputs.text'
+    assert row[2] == 'animagine-xl-v4.safetensors'
+    assert json.loads(row[3]) == ['Expressive_H-000001.safetensors', 'another_style.safetensors']

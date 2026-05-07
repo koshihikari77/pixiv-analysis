@@ -58,6 +58,10 @@ def init_db(conn: sqlite3.Connection) -> None:
             local_path TEXT NOT NULL,
             prompt_text TEXT,
             source_key TEXT,
+            model_name TEXT,
+            loras_json TEXT,
+            pixiv_illust_id INTEGER,
+            title TEXT,
             metadata_json TEXT NOT NULL,
             imported_at TEXT NOT NULL,
             PRIMARY KEY (account_id, illust_id, local_path)
@@ -65,6 +69,7 @@ def init_db(conn: sqlite3.Connection) -> None:
         """
     )
     _ensure_post_snapshots_migration(conn)
+    _ensure_prompt_assets_migration(conn)
     conn.commit()
 
 
@@ -73,6 +78,19 @@ def _ensure_post_snapshots_migration(conn: sqlite3.Connection) -> None:
     col_names = {r["name"] for r in cols}
     if "bookmark_rate" not in col_names:
         conn.execute("ALTER TABLE post_snapshots ADD COLUMN bookmark_rate REAL")
+
+
+def _ensure_prompt_assets_migration(conn: sqlite3.Connection) -> None:
+    cols = conn.execute("PRAGMA table_info(prompt_assets)").fetchall()
+    col_names = {r["name"] for r in cols}
+    if "model_name" not in col_names:
+        conn.execute("ALTER TABLE prompt_assets ADD COLUMN model_name TEXT")
+    if "loras_json" not in col_names:
+        conn.execute("ALTER TABLE prompt_assets ADD COLUMN loras_json TEXT")
+    if "pixiv_illust_id" not in col_names:
+        conn.execute("ALTER TABLE prompt_assets ADD COLUMN pixiv_illust_id INTEGER")
+    if "title" not in col_names:
+        conn.execute("ALTER TABLE prompt_assets ADD COLUMN title TEXT")
 
 
 def utc_now_iso() -> str:
@@ -176,12 +194,16 @@ def upsert_prompt_asset(conn: sqlite3.Connection, row: Dict) -> None:
     conn.execute(
         """
         INSERT INTO prompt_assets(
-            account_id, illust_id, local_path, prompt_text, source_key, metadata_json, imported_at
+            account_id, illust_id, local_path, prompt_text, source_key, model_name, loras_json, pixiv_illust_id, title, metadata_json, imported_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(account_id, illust_id, local_path) DO UPDATE SET
             prompt_text=excluded.prompt_text,
             source_key=excluded.source_key,
+            model_name=excluded.model_name,
+            loras_json=excluded.loras_json,
+            pixiv_illust_id=excluded.pixiv_illust_id,
+            title=excluded.title,
             metadata_json=excluded.metadata_json,
             imported_at=excluded.imported_at
         """,
@@ -191,6 +213,10 @@ def upsert_prompt_asset(conn: sqlite3.Connection, row: Dict) -> None:
             row["local_path"],
             row.get("prompt_text"),
             row.get("source_key"),
+            row.get("model_name"),
+            row.get("loras_json"),
+            row.get("pixiv_illust_id"),
+            row.get("title"),
             row["metadata_json"],
             row.get("imported_at", utc_now_iso()),
         ),

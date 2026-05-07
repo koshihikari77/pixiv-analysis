@@ -57,6 +57,8 @@ def _setup_db(db_path):
             local_path TEXT NOT NULL,
             prompt_text TEXT,
             source_key TEXT,
+            pixiv_illust_id INTEGER,
+            title TEXT,
             metadata_json TEXT NOT NULL,
             imported_at TEXT NOT NULL,
             PRIMARY KEY (account_id, illust_id, local_path)
@@ -76,7 +78,7 @@ def _setup_db(db_path):
         "INSERT INTO post_snapshots(account_id,illust_id,captured_at,bookmark_count,bookmark_rate,like_count,view_count,comment_count,source_mode) VALUES ('main',10,'2026-02-06T01:00:00+00:00',1,NULL,2,4,4,'daily')"
     )
     conn.execute(
-        "INSERT INTO prompt_assets(account_id,illust_id,local_path,prompt_text,source_key,metadata_json,imported_at) VALUES ('main',10,'/tmp/10.png','a test prompt','prompt','{}','2026-02-06T01:00:00+00:00')"
+        "INSERT INTO prompt_assets(account_id,illust_id,local_path,prompt_text,source_key,pixiv_illust_id,title,metadata_json,imported_at) VALUES ('akira',10,'/tmp/10.png','a test prompt','prompt',10,'t1','{}','2026-02-06T01:00:00+00:00')"
     )
     conn.commit()
     conn.close()

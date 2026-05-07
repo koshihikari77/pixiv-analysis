@@ -20,6 +20,11 @@ def test_init_db_creates_required_tables(tmp_path):
     col_names = {r["name"] for r in cols}
     assert "bookmark_rate" in col_names
 
+    prompt_cols = conn.execute("PRAGMA table_info(prompt_assets)").fetchall()
+    prompt_col_names = {r["name"] for r in prompt_cols}
+    assert "pixiv_illust_id" in prompt_col_names
+    assert "title" in prompt_col_names
+
 
 def test_post_snapshot_insert_is_idempotent(tmp_path):
     conn = db.connect_db(str(tmp_path / "test.db"))
