@@ -14,7 +14,7 @@
 - 冪等性重視（UPSERT / INSERT OR IGNORE）
 - 負荷抑制（呼び出し間隔 + ジッター、ページ数制限、詳細取得上限、429時待機）
 - `daily` では投稿から60日以内の作品だけ snapshot を取得
-- `main` は weekly、`sub2` は daily の運用を想定
+- `main` と `sub2` は weekly の運用を想定
 - Streamlit UI（フォロワー推移、投稿伸び曲線、投稿間growth比較、最新投稿一覧）
 
 ## Directory
@@ -22,7 +22,8 @@
 ```text
 .
 ├─ .github/workflows/
-│  └─ collect_daily.yml
+│  ├─ collect_main_weekly.yml
+│  └─ collect_sub_weekly.yml
 ├─ data/
 │  └─ pixiv_stats.db
 ├─ src/
@@ -169,11 +170,11 @@ uv run pytest
 
 ## GitHub Actions
 
-- `collect_daily.yml`
-  - `sub2` 用の daily 実行
+- `collect_sub_weekly.yml`
+  - `sub2` 用の weekly 実行
   - `daily` モードを `--account-id sub2` で実行
   - DB変更時のみコミット
-- `collect_weekly.yml`
+- `collect_main_weekly.yml`
   - `main` 用の weekly 実行
   - `daily` モードを `--account-id main` で実行
   - DB変更時のみコミット
