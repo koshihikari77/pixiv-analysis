@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -249,11 +250,21 @@ def _extract_illust_id(metadata: dict[str, Any], path: Path) -> int | None:
     return None
 
 
+def _derived_illust_id(path: Path, account_id: str) -> int:
+    normalized = path.resolve().as_posix()
+    marker = f"/{account_id}/"
+    stable_path = normalized.rsplit(marker, 1)[-1] if marker in normalized else normalized
+    digest = hashlib.sha256(stable_path.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big") & ((1 << 63) - 1)
+
+
 def import_prompt_assets(
     conn,
     root_dir: str,
     account_id: str | None = None,
     suffixes: set[str] | None = None,
+    derive_missing_id: bool = False,
+    include_promptless: bool = False,
 ) -> dict[str, int]:
     root = Path(root_dir)
     if not root.exists():
@@ -292,9 +303,11 @@ def import_prompt_assets(
             prompt_text, source_key = _extract_prompt_text(metadata)
             model_name, loras = _extract_model_and_loras(metadata)
             illust_id = _extract_illust_id(metadata, path)
-            if not prompt_text:
+            if not prompt_text and not include_promptless:
                 summary["skipped_no_prompt"] += 1
                 continue
+            if illust_id is None and derive_missing_id:
+                illust_id = _derived_illust_id(path, effective_account_id)
             if illust_id is None:
                 summary["skipped_no_illust_id"] += 1
                 continue

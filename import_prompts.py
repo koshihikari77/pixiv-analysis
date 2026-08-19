@@ -23,6 +23,16 @@ def _parse_args() -> argparse.Namespace:
         default=os.environ.get("DB_PATH", "data/pixiv_stats.db"),
         help="SQLite database path",
     )
+    parser.add_argument(
+        "--derive-missing-id",
+        action="store_true",
+        help="Derive a stable local ID from the account-relative path when metadata and filename have no ID",
+    )
+    parser.add_argument(
+        "--include-promptless",
+        action="store_true",
+        help="Import local images even when prompt metadata is absent",
+    )
     return parser.parse_args()
 
 
@@ -36,6 +46,8 @@ def main() -> int:
         root_dir=args.root,
         account_id=args.account_id,
         suffixes=suffixes,
+        derive_missing_id=args.derive_missing_id,
+        include_promptless=args.include_promptless,
     )
     db.commit(conn)
     conn.close()

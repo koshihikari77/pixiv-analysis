@@ -84,3 +84,66 @@ def test_import_prompt_assets_extracts_comfyui_prompt_text(tmp_path):
     assert row[1] == 'workflow:275.inputs.text'
     assert row[2] == 'animagine-xl-v4.safetensors'
     assert json.loads(row[3]) == ['Expressive_H-000001.safetensors', 'another_style.safetensors']
+
+
+def test_import_prompt_assets_can_derive_id_from_relative_path(tmp_path):
+    db_path = tmp_path / 'test.db'
+    conn = db.connect_db(str(db_path))
+    db.init_db(conn)
+
+    root = tmp_path / 'assets' / 'wakame'
+    root.mkdir(parents=True)
+    png_path = root / 'scene_final.png'
+    _make_png(png_path, 'a prompt without a usable filename id', 1)
+    with Image.open(png_path) as img:
+        meta = PngImagePlugin.PngInfo()
+        meta.add_text('prompt', 'a prompt without a usable filename id')
+        img.save(png_path, pnginfo=meta)
+
+    summary = import_prompt_assets(
+        conn,
+        root_dir=str(root),
+        account_id='wakame',
+        derive_missing_id=True,
+    )
+    db.commit(conn)
+
+    row = conn.execute(
+        "SELECT illust_id FROM prompt_assets WHERE account_id='wakame'"
+    ).fetchone()
+    conn.close()
+
+    assert summary['imported'] == 1
+    assert isinstance(row['illust_id'], int)
+    assert row['illust_id'] > 0
+
+
+def test_import_prompt_assets_can_include_promptless_image(tmp_path):
+    db_path = tmp_path / 'test.db'
+    conn = db.connect_db(str(db_path))
+    db.init_db(conn)
+
+    root = tmp_path / 'assets' / 'wakame'
+    root.mkdir(parents=True)
+    jpg_path = root / 'pixiv_sample.jpg'
+    Image.new('RGB', (2, 2), color='white').save(jpg_path)
+
+    summary = import_prompt_assets(
+        conn,
+        root_dir=str(root),
+        account_id='wakame',
+        suffixes={'.jpg'},
+        derive_missing_id=True,
+        include_promptless=True,
+    )
+    db.commit(conn)
+
+    row = conn.execute(
+        "SELECT local_path, prompt_text, source_key FROM prompt_assets WHERE account_id='wakame'"
+    ).fetchone()
+    conn.close()
+
+    assert summary['imported'] == 1
+    assert row['local_path'] == str(jpg_path.resolve())
+    assert row['prompt_text'] is None
+    assert row['source_key'] is None

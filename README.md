@@ -121,6 +121,30 @@ uv run python import_prompts.py --root /path/to/assets --account-id main
 ```
 
 `--account-id` を省略した場合は、`<root>/<account_id>/...` の先頭ディレクトリ名を使います。
+画像メタデータとファイル名のどちらにも生成IDがない場合は、
+`--derive-missing-id` でアカウント配下の相対パスから安定したローカルIDを生成できます。
+プロンプト情報が消えている書き出し済みJPGもローカル画像として保持する場合は、
+`--include-promptless` を指定します。
+
+紐づけJSONの適用時は、Pixiv投稿側のアカウントとは別に、ローカル画像を取り込んだ
+`prompt_assets.account_id` と画像rootを指定できます。
+
+```bash
+uv run python apply_prompt_links.py \
+  --json-path data/prompt_post_links.sub2.json \
+  --asset-account-id akira \
+  --prompt-root /path/to/pixiv/akira
+```
+
+`--prompt-root` は `PROMPT_ROOT`、`--asset-account-id` は
+`PROMPT_ASSET_ACCOUNT_ID` でも指定できます。
+画像rootをマウントできない環境では、JSONが個別画像パスを指定済みなら
+`--allow-unmounted-root` を付けて、取込済みDBパスとの照合だけで適用できます。
+DBに旧PCの絶対パスが保存されていても、画像root配下の相対パスで照合されます。
+フォルダ指定は既定でPNGだけを展開します。別形式も取り込んだ場合は
+`--extensions png,jpg` のように指定します。
+`unmatched_local_images` の既存DBリンクは通常変更しません。明示的に解除する場合だけ
+`--clear-unmatched` を付けます。
 
 仮の投稿紐づけは `data/prompt_post_links.main.json` と `data/prompt_post_links.sub2.json` に保存しています。
 - `main` と `sub2` で別ファイルです

@@ -164,14 +164,15 @@ def _load_posts(conn: sqlite3.Connection, account_id: str) -> list[sqlite3.Row]:
     ).fetchall()
 
 
-def _load_assets(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+def _load_assets(conn: sqlite3.Connection, asset_account_id: str) -> list[sqlite3.Row]:
     return conn.execute(
         """
         SELECT local_path, pixiv_illust_id
         FROM prompt_assets
-        WHERE account_id = 'akira'
+        WHERE account_id = ?
         ORDER BY COALESCE(pixiv_illust_id, -1), local_path
-        """
+        """,
+        (asset_account_id,),
     ).fetchall()
 
 
@@ -213,13 +214,26 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def main() -> int:
+    global PROMPT_ROOT
+
     parser = argparse.ArgumentParser(description='Export prompt-to-post link JSONs')
     parser.add_argument('--account-id', default=None, choices=[None, *ACCOUNT_IDS], help='Export only one account file')
+    parser.add_argument(
+        '--prompt-root',
+        default=str(PROMPT_ROOT),
+        help='Root directory used to make local image paths relative (default: PROMPT_ROOT)',
+    )
+    parser.add_argument(
+        '--asset-account-id',
+        default=os.environ.get('PROMPT_ASSET_ACCOUNT_ID', 'akira'),
+        help='prompt_assets account_id to export (default: PROMPT_ASSET_ACCOUNT_ID or akira)',
+    )
     args = parser.parse_args()
+    PROMPT_ROOT = Path(args.prompt_root)
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    assets = _load_assets(conn)
+    assets = _load_assets(conn, args.asset_account_id)
 
     account_ids = [args.account_id] if args.account_id else ACCOUNT_IDS
     for account_id in account_ids:
