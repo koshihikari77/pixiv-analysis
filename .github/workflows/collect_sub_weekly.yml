@@ -35,7 +35,7 @@ jobs:
           API_MIN_INTERVAL_SEC: "1.0"
           API_JITTER_SEC: "0.3"
           TZ: UTC
-        run: python collect.py --mode daily --account-id sub2
+        run: python collect.py --mode daily --account-id sub2 --pixiv-user-id 117438916
 
       - name: Commit DB changes
         run: |
