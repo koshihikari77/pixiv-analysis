@@ -30,16 +30,19 @@ description: pixiv アカウント統計を収集して SQLite に保存し、St
 
 ## 主要成果物
 
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/data/pixiv_stats.db`
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/src/` - collector 本体
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/ui/` - Streamlit UI
+- `/home/inada/03_projects/pixiv-analysis/data/pixiv_stats.db`
+- `/home/inada/03_projects/pixiv-analysis/src/` - collector 本体
+- `/home/inada/03_projects/pixiv-analysis/ui/` - Streamlit UI
 
 ## 典型的なワークフロー
 
-1. `.env` を用意する
-2. `collect.py` で統計を収集する
-3. SQLite を更新する
-4. `ui/app.py` で可視化する
+収集の正規経路は **GitHub Actions**（`collect-main-weekly` / `collect-sub-weekly`、毎週日曜 UTC 0時台）。CI が `collect.py` を回して `data/pixiv_stats.db` を commit する。ローカルに `.env` は無いので、ローカルで `collect.py` は動かない。
+
+1. 最新化: `git pull --ff-only`（今すぐ取りたいときは `gh workflow run <id>` で手動実行。main と sub を同時に起動すると push が衝突するので、片方が終わってから次を起動する）
+2. 集計: `data/pixiv_stats.db` を読み取り専用で集計する（sqlite3 CLI は無いので python の sqlite3 を使う）
+3. 可視化: `ui/app.py`
+
+注意: ローカルで DB を書き換えて commit すると、CI の週次 commit と分岐する（DB はバイナリなのでマージできない）。DB への書き込みは CI に任せる。
 
 ## 受け渡し点
 

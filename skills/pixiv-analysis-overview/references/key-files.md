@@ -2,27 +2,27 @@
 
 ## 最優先
 
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/README.md`
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/pyproject.toml`
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/collect.py`
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/src/main.py`
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/src/config.py`
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/ui/app.py`
+- `/home/inada/03_projects/pixiv-analysis/README.md`
+- `/home/inada/03_projects/pixiv-analysis/pyproject.toml`
+- `/home/inada/03_projects/pixiv-analysis/collect.py`
+- `/home/inada/03_projects/pixiv-analysis/src/main.py`
+- `/home/inada/03_projects/pixiv-analysis/src/config.py`
+- `/home/inada/03_projects/pixiv-analysis/ui/app.py`
 
 ## 状況別
 
 ### DB を知りたい
 
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/src/db.py`
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/data/pixiv_stats.db`
+- `/home/inada/03_projects/pixiv-analysis/src/db.py`
+- `/home/inada/03_projects/pixiv-analysis/data/pixiv_stats.db`
 
 ### API 取得を知りたい
 
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/src/pixiv_client.py`
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/src/collectors/posts.py`
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/src/collectors/accounts.py`
+- `/home/inada/03_projects/pixiv-analysis/src/pixiv_client.py`
+- `/home/inada/03_projects/pixiv-analysis/src/collectors/posts.py`
+- `/home/inada/03_projects/pixiv-analysis/src/collectors/accounts.py`
 
 ### UI を知りたい
 
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/ui/data_access.py`
-- `/mnt/c/Users/inada/obsidian/base/03_projects/pixiv_analysis/ui/transform.py`
+- `/home/inada/03_projects/pixiv-analysis/ui/data_access.py`
+- `/home/inada/03_projects/pixiv-analysis/ui/transform.py`
