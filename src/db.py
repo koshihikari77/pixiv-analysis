@@ -1,7 +1,28 @@
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
+
+# prompt_assets (local image paths / prompts / pixiv links) live in a separate,
+# git-ignored local DB. The CI-committed pixiv_stats.db must never receive them.
+DEFAULT_PROMPT_DB_PATH = "data/prompt_assets.db"
+PROMPT_DB_ALIAS = "pdb"
+
+_PROMPT_ASSETS_COLUMNS = """
+    account_id TEXT NOT NULL,
+    illust_id INTEGER NOT NULL,
+    local_path TEXT NOT NULL,
+    prompt_text TEXT,
+    source_key TEXT,
+    model_name TEXT,
+    loras_json TEXT,
+    pixiv_illust_id INTEGER,
+    title TEXT,
+    metadata_json TEXT NOT NULL,
+    imported_at TEXT NOT NULL,
+    PRIMARY KEY (account_id, illust_id, local_path)
+"""
 
 
 def connect_db(db_path: str) -> sqlite3.Connection:
@@ -52,25 +73,56 @@ def init_db(conn: sqlite3.Connection) -> None:
             captured_at TEXT NOT NULL,
             PRIMARY KEY (account_id, date)
         );
-        CREATE TABLE IF NOT EXISTS prompt_assets (
-            account_id TEXT NOT NULL,
-            illust_id INTEGER NOT NULL,
-            local_path TEXT NOT NULL,
-            prompt_text TEXT,
-            source_key TEXT,
-            model_name TEXT,
-            loras_json TEXT,
-            pixiv_illust_id INTEGER,
-            title TEXT,
-            metadata_json TEXT NOT NULL,
-            imported_at TEXT NOT NULL,
-            PRIMARY KEY (account_id, illust_id, local_path)
-        );
         """
     )
     _ensure_post_snapshots_migration(conn)
+    conn.commit()
+
+
+def default_prompt_db_path() -> str:
+    return os.environ.get("PROMPT_DB_PATH", DEFAULT_PROMPT_DB_PATH)
+
+
+def init_prompt_db(conn: sqlite3.Connection) -> None:
+    """Create prompt_assets in the local prompt DB (not in pixiv_stats.db)."""
+    conn.executescript(
+        """
+        PRAGMA journal_mode=WAL;
+        CREATE TABLE IF NOT EXISTS prompt_assets ("""
+        + _PROMPT_ASSETS_COLUMNS
+        + """);
+        """
+    )
     _ensure_prompt_assets_migration(conn)
     conn.commit()
+
+
+def attach_prompt_db(
+    conn: sqlite3.Connection,
+    prompt_db_path: Optional[str],
+    alias: str = PROMPT_DB_ALIAS,
+) -> bool:
+    """ATTACH the local prompt DB as ``alias`` for read-side joins.
+
+    When the file does not exist, an empty in-memory schema is attached under
+    the same alias so queries referencing ``<alias>.prompt_assets`` still run.
+    Returns True when a real prompt DB file was attached.
+    """
+    if prompt_db_path and Path(prompt_db_path).is_file():
+        conn.execute(f"ATTACH DATABASE ? AS {alias}", (str(prompt_db_path),))
+        has_table = conn.execute(
+            f"SELECT 1 FROM {alias}.sqlite_master WHERE type='table' AND name='prompt_assets'"
+        ).fetchone()
+        if has_table:
+            return True
+        conn.execute(f"DETACH DATABASE {alias}")
+    conn.execute(f"ATTACH DATABASE ':memory:' AS {alias}")
+    conn.execute(
+        f"""
+        CREATE TABLE {alias}.prompt_assets ({_PROMPT_ASSETS_COLUMNS})
+        """
+    )
+    return False
 
 
 def _ensure_post_snapshots_migration(conn: sqlite3.Connection) -> None:

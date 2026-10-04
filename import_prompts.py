@@ -1,5 +1,4 @@
 import argparse
-import os
 
 from src import db
 from src.collectors.prompt_assets import import_prompt_assets
@@ -19,9 +18,10 @@ def _parse_args() -> argparse.Namespace:
         help="Comma-separated file extensions to import, e.g. png or png,jpg",
     )
     parser.add_argument(
-        "--db-path",
-        default=os.environ.get("DB_PATH", "data/pixiv_stats.db"),
-        help="SQLite database path",
+        "--prompt-db-path",
+        default=db.default_prompt_db_path(),
+        help="Local prompt SQLite DB path (default: PROMPT_DB_PATH or data/prompt_assets.db). "
+        "Never point this at the CI-committed data/pixiv_stats.db.",
     )
     parser.add_argument(
         "--derive-missing-id",
@@ -38,8 +38,8 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = _parse_args()
-    conn = db.connect_db(args.db_path)
-    db.init_db(conn)
+    conn = db.connect_db(args.prompt_db_path)
+    db.init_prompt_db(conn)
     suffixes = {f".{ext.strip().lower().lstrip('.')}" for ext in args.extensions.split(",") if ext.strip()}
     summary = import_prompt_assets(
         conn,

@@ -9,8 +9,7 @@ from typing import Any, Iterable
 
 from src import db
 
-DB_PATH = os.environ.get('DB_PATH', 'data/pixiv_stats.db')
-PROMPT_ROOT = Path(os.environ.get('PROMPT_ROOT', '/mnt/c/Users/inada/obsidian/base/03_projects/pixiv/akira'))
+PROMPT_ROOT = Path(os.environ.get('PROMPT_ROOT', '/home/inada/03_projects/pixiv/akira'))
 ASSET_ACCOUNT_ID = os.environ.get('PROMPT_ASSET_ACCOUNT_ID', 'akira')
 IMAGE_SUFFIXES = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tif', '.tiff'}
 EXPAND_SUFFIXES = {'.png'}
@@ -237,6 +236,11 @@ def main() -> int:
         help='Comma-separated extensions expanded by folder specs (default: png)',
     )
     parser.add_argument(
+        '--prompt-db-path',
+        default=db.default_prompt_db_path(),
+        help='Local prompt SQLite DB path (default: PROMPT_DB_PATH or data/prompt_assets.db)',
+    )
+    parser.add_argument(
         '--clear-unmatched',
         action='store_true',
         help='Clear DB links for unmatched_local_images; disabled by default to protect other account mappings',
@@ -259,8 +263,8 @@ def main() -> int:
         include_unmatched=args.clear_unmatched,
     )
 
-    conn = db.connect_db(DB_PATH)
-    db.init_db(conn)
+    conn = db.connect_db(args.prompt_db_path)
+    db.init_prompt_db(conn)
 
     rows = conn.execute(
         "SELECT account_id, illust_id, local_path, pixiv_illust_id, title "
@@ -329,7 +333,7 @@ def main() -> int:
     print(
         f'updated {updated} prompt_asset rows, cleared {cleared}, '
         f'pixiv_account={pixiv_account_id}, asset_account={args.asset_account_id}, '
-        f'from {json_path}'
+        f'from {json_path} into {args.prompt_db_path}'
     )
     return 0
 

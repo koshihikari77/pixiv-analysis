@@ -11,8 +11,10 @@ from typing import Any
 
 import sqlite3
 
+from src import db
+
 DB_PATH = os.environ.get('DB_PATH', 'data/pixiv_stats.db')
-PROMPT_ROOT = Path(os.environ.get('PROMPT_ROOT', '/mnt/c/Users/inada/obsidian/base/03_projects/pixiv/akira'))
+PROMPT_ROOT = Path(os.environ.get('PROMPT_ROOT', '/home/inada/03_projects/pixiv/akira'))
 OUT_DIR = Path('data')
 ACCOUNT_IDS = ['main', 'sub2']
 
@@ -168,7 +170,7 @@ def _load_assets(conn: sqlite3.Connection, asset_account_id: str) -> list[sqlite
     return conn.execute(
         """
         SELECT local_path, pixiv_illust_id
-        FROM prompt_assets
+        FROM pdb.prompt_assets
         WHERE account_id = ?
         ORDER BY COALESCE(pixiv_illust_id, -1), local_path
         """,
@@ -228,11 +230,20 @@ def main() -> int:
         default=os.environ.get('PROMPT_ASSET_ACCOUNT_ID', 'akira'),
         help='prompt_assets account_id to export (default: PROMPT_ASSET_ACCOUNT_ID or akira)',
     )
+    parser.add_argument('--db-path', default=DB_PATH, help='pixiv stats DB (posts), read-only use')
+    parser.add_argument(
+        '--prompt-db-path',
+        default=db.default_prompt_db_path(),
+        help='Local prompt SQLite DB path (default: PROMPT_DB_PATH or data/prompt_assets.db)',
+    )
     args = parser.parse_args()
     PROMPT_ROOT = Path(args.prompt_root)
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(args.db_path)
     conn.row_factory = sqlite3.Row
+    if not db.attach_prompt_db(conn, args.prompt_db_path):
+        conn.close()
+        raise SystemExit(f'prompt DB not found or has no prompt_assets: {args.prompt_db_path}')
     assets = _load_assets(conn, args.asset_account_id)
 
     account_ids = [args.account_id] if args.account_id else ACCOUNT_IDS

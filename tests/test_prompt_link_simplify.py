@@ -72,3 +72,47 @@ def test_link_prompt_posts_simplifies_relative_paths(tmp_path, monkeypatch):
     assert link_prompt_posts._simplify_relative_paths([
         'folder/0003.png',
     ]) == ['folder/0003.png']
+
+
+def test_link_prompt_posts_joins_posts_with_attached_prompt_db(tmp_path, monkeypatch):
+    import json
+    import sys
+
+    from src import db
+
+    root = tmp_path / 'assets'
+    _make_png(root / 'folder' / '0001.png')
+    stats_db = tmp_path / 'pixiv_stats.db'
+    prompt_db = tmp_path / 'prompt_assets.db'
+
+    sconn = db.connect_db(str(stats_db))
+    db.init_db(sconn)
+    db.upsert_post(sconn, {
+        'account_id': 'sub2', 'illust_id': 777, 'create_date': '2026-01-01T00:00:00+00:00',
+        'tags_json': '[]', 'title': 'post',
+    })
+    db.commit(sconn)
+    sconn.close()
+
+    pconn = db.connect_db(str(prompt_db))
+    db.init_prompt_db(pconn)
+    db.upsert_prompt_asset(pconn, {
+        'account_id': 'akira', 'illust_id': 1,
+        'local_path': str((root / 'folder' / '0001.png').resolve()),
+        'pixiv_illust_id': 777, 'metadata_json': '{}',
+    })
+    db.commit(pconn)
+    pconn.close()
+
+    out_dir = tmp_path / 'out'
+    out_dir.mkdir()
+    monkeypatch.setattr(link_prompt_posts, 'OUT_DIR', out_dir)
+    monkeypatch.setattr(sys, 'argv', [
+        'link_prompt_posts.py', '--account-id', 'sub2', '--prompt-root', str(root),
+        '--asset-account-id', 'akira', '--db-path', str(stats_db), '--prompt-db-path', str(prompt_db),
+    ])
+    assert link_prompt_posts.main() == 0
+
+    payload = json.loads((out_dir / 'prompt_post_links.sub2.json').read_text(encoding='utf-8'))
+    assert payload['posts'][0]['pixiv_illust_id'] == 777
+    assert payload['posts'][0]['local_images'] == ['folder']

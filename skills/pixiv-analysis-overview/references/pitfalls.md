@@ -17,3 +17,9 @@
 - 症状: 想定より収集量が少ない / 多い
 - 原因: `daily` と `manual` の違いを把握していない
 - 対処: `src/main.py` と `README.md` の収集方針を読む
+
+## 4. prompt_assets を pixiv_stats.db に書いてしまう
+
+- 症状: CI の週次 commit と DB が分岐してマージ不能 / wakame 全取り込みで DB が 100MB 超になり push できない
+- 原因: 旧版は `prompt_assets` を `pixiv_stats.db` に書いていた
+- 対処: `prompt_assets` はローカル専用 `data/prompt_assets.db` に書く（現行スクリプトの既定）。`--prompt-db-path` に `pixiv_stats.db` を渡さない。`pixiv_stats.db` 内の旧 `prompt_assets` は残置・未使用

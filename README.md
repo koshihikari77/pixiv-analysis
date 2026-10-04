@@ -8,7 +8,7 @@
 - 複数アカウント対応（`account_id` で分離）
 - 投稿メタ収集（`illust_id`, `create_date`, `tags`, `type`, `page_count`, `x_restrict`）
 - 投稿スナップショット時系列（`captured_at` + 各種カウント）
-- ローカル画像メタデータからの prompt 取り込み（`prompt_assets`）
+- ローカル画像メタデータからの prompt 取り込み（`prompt_assets`、ローカル専用 DB `data/prompt_assets.db`）
 - 日次フォロワー記録（`followers`, `following`）
 - `daily` / `manual` 実行モード
 - 冪等性重視（UPSERT / INSERT OR IGNORE）
@@ -109,6 +109,39 @@ uv run python collect.py --mode manual --account-id main
 
 ローカル画像のメタデータに入っている prompt を `prompt_assets` テーブルに取り込めます。
 
+### ローカル専用 prompt DB（`data/prompt_assets.db`）
+
+`prompt_assets`（ローカル画像パス・prompt・pixiv 作品リンク）は、CI が週次 commit する
+`data/pixiv_stats.db` とは**別のローカル専用 DB** に置きます。
+
+- 既定パス: `data/prompt_assets.db`（`.gitignore` 済み。commit しない）
+- 変更: 環境変数 `PROMPT_DB_PATH`、または各スクリプトの `--prompt-db-path`
+- 書き込み（`import_prompts.py` / `apply_prompt_links.py`）は prompt DB だけに行い、
+  `pixiv_stats.db` には一切書かない
+- 読み取り（UI / `link_prompt_posts.py`）は `pixiv_stats.db` を開き、prompt DB を
+  SQLite `ATTACH ... AS pdb` で結合する（`pdb.prompt_assets`）
+- prompt DB が無い場合は空の `pdb.prompt_assets` を in-memory で ATTACH するので、
+  UI はプロンプト列が空になるだけで落ちない
+- CI（`collect.py` → `init_db`）は prompt DB に触れない。`init_db` は `prompt_assets` を作らない
+- 分離の理由: ローカルで `pixiv_stats.db` に書くと CI の週次 commit と分岐してマージできず、
+  wakame 全取り込みで DB が 200MB 超になり GitHub の 100MB 上限を超えるため
+- 旧 `pixiv_stats.db` 内の `prompt_assets` テーブル（akira の旧パス行）は**残置・未使用**。
+  CI の DB を変えないため DROP しない。UI/スクリプトはこのテーブルを参照しない
+
+再構築手順（prompt DB は再生成可能。正本は画像メタデータとリンク JSON）:
+
+```bash
+uv run python import_prompts.py --root /home/inada/03_projects/pixiv/akira --account-id akira
+uv run python import_prompts.py --root /home/inada/03_projects/pixiv/wakame --account-id wakame \
+  --extensions png,jpg --derive-missing-id --include-promptless
+uv run python apply_prompt_links.py --json-path data/prompt_post_links.main.json \
+  --asset-account-id wakame --prompt-root /home/inada/03_projects/pixiv/wakame
+uv run python apply_prompt_links.py --json-path data/prompt_post_links.sub2.json \
+  --asset-account-id akira --prompt-root /home/inada/03_projects/pixiv/akira
+```
+
+アカウント対応: pixiv `main` = ローカル資産 `wakame`、pixiv `sub2` = ローカル資産 `akira`。
+
 前提:
 - 画像メタデータに `prompt` もしくは類似キーが入っていること
 - `illust_id` がメタデータ内にあるか、ファイル名に数値 ID が含まれていること
@@ -189,7 +222,7 @@ UI内容:
 ## Test
 
 ```bash
-uv run pytest
+uv run --with-requirements requirements-dev.txt python -m pytest
 ```
 
 ## GitHub Actions
@@ -213,7 +246,12 @@ uv run pytest
 - `posts(account_id, illust_id, create_date, tags_json, type, page_count, x_restrict, title, updated_at)`
 - `post_snapshots(account_id, illust_id, captured_at, bookmark_count, bookmark_rate, like_count, view_count, comment_count, source_mode)`
 - `account_daily(account_id, date, followers, following, captured_at)`
-- `prompt_assets(account_id, illust_id, local_path, prompt_text, source_key, metadata_json, imported_at)`
+
+`data/prompt_assets.db`（ローカル専用・git 管理外）:
+
+- `prompt_assets(account_id, illust_id, local_path, prompt_text, source_key, model_name, loras_json, pixiv_illust_id, title, metadata_json, imported_at)`
+
+`pixiv_stats.db` に残っている旧 `prompt_assets` は残置・未使用です。
 
 ## Notes
 

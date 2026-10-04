@@ -1,7 +1,9 @@
 import sqlite3
 
+from src import db as core_db
 from ui.data_access import (
     has_required_tables,
+    prompt_db_available,
     load_accounts,
     load_follower_daily,
     load_growth_benchmark,
@@ -51,18 +53,6 @@ def _setup_db(db_path):
             captured_at TEXT NOT NULL,
             PRIMARY KEY (account_id, date)
         );
-        CREATE TABLE prompt_assets (
-            account_id TEXT NOT NULL,
-            illust_id INTEGER NOT NULL,
-            local_path TEXT NOT NULL,
-            prompt_text TEXT,
-            source_key TEXT,
-            pixiv_illust_id INTEGER,
-            title TEXT,
-            metadata_json TEXT NOT NULL,
-            imported_at TEXT NOT NULL,
-            PRIMARY KEY (account_id, illust_id, local_path)
-        );
         """
     )
     conn.execute(
@@ -77,16 +67,89 @@ def _setup_db(db_path):
     conn.execute(
         "INSERT INTO post_snapshots(account_id,illust_id,captured_at,bookmark_count,bookmark_rate,like_count,view_count,comment_count,source_mode) VALUES ('main',10,'2026-02-06T01:00:00+00:00',1,NULL,2,4,4,'daily')"
     )
-    conn.execute(
-        "INSERT INTO prompt_assets(account_id,illust_id,local_path,prompt_text,source_key,pixiv_illust_id,title,metadata_json,imported_at) VALUES ('akira',10,'/tmp/10.png','a test prompt','prompt',10,'t1','{}','2026-02-06T01:00:00+00:00')"
+    conn.commit()
+    conn.close()
+
+
+def _setup_prompt_db(prompt_db_path):
+    conn = core_db.connect_db(prompt_db_path)
+    core_db.init_prompt_db(conn)
+    core_db.upsert_prompt_asset(
+        conn,
+        {
+            "account_id": "akira",
+            "illust_id": 10,
+            "local_path": "/tmp/10.png",
+            "prompt_text": "a test prompt",
+            "source_key": "prompt",
+            "pixiv_illust_id": 10,
+            "title": "t1",
+            "metadata_json": "{}",
+            "imported_at": "2026-02-06T01:00:00+00:00",
+        },
     )
     conn.commit()
     conn.close()
 
 
+def _add_legacy_prompt_table(db_path):
+    """Simulate the unused legacy prompt_assets left in pixiv_stats.db."""
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE prompt_assets (
+            account_id TEXT NOT NULL,
+            illust_id INTEGER NOT NULL,
+            local_path TEXT NOT NULL,
+            prompt_text TEXT,
+            source_key TEXT,
+            pixiv_illust_id INTEGER,
+            title TEXT,
+            metadata_json TEXT NOT NULL,
+            imported_at TEXT NOT NULL,
+            PRIMARY KEY (account_id, illust_id, local_path)
+        );
+        INSERT INTO prompt_assets VALUES
+            ('akira',99,'/mnt/c/old.png','legacy prompt','prompt',10,'t1','{}','2027-01-01T00:00:00+00:00');
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_data_access_without_prompt_db(tmp_path):
+    db_path = tmp_path / "pixiv_stats.db"
+    _setup_db(str(db_path))
+    _add_legacy_prompt_table(str(db_path))
+
+    assert has_required_tables(str(db_path)) is True
+    assert prompt_db_available(str(db_path)) is False
+
+    posts = load_posts_with_latest_snapshot(str(db_path), account_id="main", limit=10)
+    assert len(posts) == 1
+    # legacy table in the stats DB must be ignored
+    assert posts["prompt_text"].isna().all()
+
+    snaps = load_post_snapshots(str(db_path), account_id="main", illust_id=10)
+    assert len(snaps) == 1
+    assert snaps["prompt_text"].isna().all()
+
+    growth = load_growth_benchmark(
+        str(db_path),
+        account_id="main",
+        target_hours=1.0,
+        metric="bookmark_count",
+        tolerance_hours=1.0,
+    )
+    assert len(growth) == 1
+    assert not (tmp_path / "prompt_assets.db").exists()
+
+
 def test_data_access_queries(tmp_path):
     db_path = tmp_path / "ui.db"
     _setup_db(str(db_path))
+    _setup_prompt_db(str(tmp_path / "prompt_assets.db"))
+    assert prompt_db_available(str(db_path)) is True
 
     assert has_required_tables(str(db_path)) is True
 

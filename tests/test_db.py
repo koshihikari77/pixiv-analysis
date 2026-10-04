@@ -14,16 +14,63 @@ def test_init_db_creates_required_tables(tmp_path):
     assert "posts" in names
     assert "post_snapshots" in names
     assert "account_daily" in names
-    assert "prompt_assets" in names
+    # prompt_assets lives in the local prompt DB, never in the CI stats DB.
+    assert "prompt_assets" not in names
 
     cols = conn.execute("PRAGMA table_info(post_snapshots)").fetchall()
     col_names = {r["name"] for r in cols}
     assert "bookmark_rate" in col_names
 
+
+def test_init_prompt_db_creates_prompt_assets_only(tmp_path):
+    conn = db.connect_db(str(tmp_path / "prompt_assets.db"))
+    db.init_prompt_db(conn)
+
+    names = {
+        r["name"]
+        for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }
+    assert names == {"prompt_assets"}
+
     prompt_cols = conn.execute("PRAGMA table_info(prompt_assets)").fetchall()
     prompt_col_names = {r["name"] for r in prompt_cols}
     assert "pixiv_illust_id" in prompt_col_names
     assert "title" in prompt_col_names
+
+
+def test_attach_prompt_db_falls_back_to_empty_schema(tmp_path):
+    conn = db.connect_db(str(tmp_path / "stats.db"))
+    db.init_db(conn)
+    missing = tmp_path / "missing_prompt.db"
+
+    assert db.attach_prompt_db(conn, str(missing)) is False
+    assert not missing.exists()
+    count = conn.execute("SELECT COUNT(*) AS c FROM pdb.prompt_assets").fetchone()["c"]
+    assert count == 0
+
+
+def test_attach_prompt_db_reads_separate_file(tmp_path):
+    prompt_path = tmp_path / "prompt_assets.db"
+    pconn = db.connect_db(str(prompt_path))
+    db.init_prompt_db(pconn)
+    db.upsert_prompt_asset(
+        pconn,
+        {
+            "account_id": "akira",
+            "illust_id": 1,
+            "local_path": "/tmp/1.png",
+            "prompt_text": "p",
+            "metadata_json": "{}",
+        },
+    )
+    db.commit(pconn)
+    pconn.close()
+
+    conn = db.connect_db(str(tmp_path / "stats.db"))
+    db.init_db(conn)
+    assert db.attach_prompt_db(conn, str(prompt_path)) is True
+    row = conn.execute("SELECT prompt_text FROM pdb.prompt_assets").fetchone()
+    assert row["prompt_text"] == "p"
 
 
 def test_post_snapshot_insert_is_idempotent(tmp_path):
@@ -80,8 +127,8 @@ def test_account_daily_upsert_updates_same_day(tmp_path):
 
 
 def test_prompt_asset_upsert_updates_same_path(tmp_path):
-    conn = db.connect_db(str(tmp_path / "test.db"))
-    db.init_db(conn)
+    conn = db.connect_db(str(tmp_path / "prompt_assets.db"))
+    db.init_prompt_db(conn)
 
     row = {
         "account_id": "main",

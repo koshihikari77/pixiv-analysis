@@ -30,7 +30,8 @@ description: pixiv アカウント統計を収集して SQLite に保存し、St
 
 ## 主要成果物
 
-- `/home/inada/03_projects/pixiv-analysis/data/pixiv_stats.db`
+- `/home/inada/03_projects/pixiv-analysis/data/pixiv_stats.db` - 統計 DB（CI が週次 commit。ローカルで書かない）
+- `/home/inada/03_projects/pixiv-analysis/data/prompt_assets.db` - ローカル画像 prompt と pixiv 作品リンク（ローカル専用・git 管理外・再生成可能）
 - `/home/inada/03_projects/pixiv-analysis/src/` - collector 本体
 - `/home/inada/03_projects/pixiv-analysis/ui/` - Streamlit UI
 
@@ -43,6 +44,13 @@ description: pixiv アカウント統計を収集して SQLite に保存し、St
 3. 可視化: `ui/app.py`
 
 注意: ローカルで DB を書き換えて commit すると、CI の週次 commit と分岐する（DB はバイナリなのでマージできない）。DB への書き込みは CI に任せる。
+
+### ローカル画像の prompt / 投稿リンク（prompt DB）
+
+`prompt_assets` は `data/pixiv_stats.db` ではなくローカル専用の `data/prompt_assets.db`（`PROMPT_DB_PATH` / `--prompt-db-path` で変更可）に置く。
+`import_prompts.py` / `apply_prompt_links.py` は prompt DB だけに書き、UI と `link_prompt_posts.py` は `ATTACH ... AS pdb` で統計 DB と結合する。prompt DB が無くても UI は落ちない（プロンプト列が空になる）。
+`pixiv_stats.db` に残る旧 `prompt_assets` は残置・未使用（CI の DB を変えないため DROP しない）。
+リンク定義の正本は git 管理の `data/prompt_post_links.{main,sub2}.json`（pixiv `main`=資産 `wakame`、`sub2`=資産 `akira`）。手順は `references/commands.md`。
 
 ## 受け渡し点
 

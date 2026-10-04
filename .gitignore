@@ -2,3 +2,8 @@
 .venv/
 __pycache__/
 .pytest_cache/
+
+# Local-only prompt DB (prompt_assets). Never commit; CI commits pixiv_stats.db only.
+data/prompt_assets.db
+data/prompt_assets.db-wal
+data/prompt_assets.db-shm

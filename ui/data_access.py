@@ -1,16 +1,44 @@
+import os
 import sqlite3
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 
+from src import db as core_db
 
-REQUIRED_TABLES = {"accounts", "posts", "post_snapshots", "account_daily", "prompt_assets"}
+# prompt_assets is NOT required in pixiv_stats.db: it lives in the local prompt DB
+# (data/prompt_assets.db) and is ATTACHed as `pdb` when present.
+REQUIRED_TABLES = {"accounts", "posts", "post_snapshots", "account_daily"}
+
+
+def resolve_prompt_db_path(db_path: str, prompt_db_path: Optional[str] = None) -> str:
+    if prompt_db_path:
+        return prompt_db_path
+    env_path = os.environ.get("PROMPT_DB_PATH")
+    if env_path:
+        return env_path
+    return str(Path(db_path).parent / Path(core_db.DEFAULT_PROMPT_DB_PATH).name)
 
 
 def _connect(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _connect_with_prompts(db_path: str, prompt_db_path: Optional[str]) -> sqlite3.Connection:
+    conn = _connect(db_path)
+    core_db.attach_prompt_db(conn, resolve_prompt_db_path(db_path, prompt_db_path))
+    return conn
+
+
+def prompt_db_available(db_path: str, prompt_db_path: Optional[str] = None) -> bool:
+    conn = sqlite3.connect(":memory:")
+    try:
+        return core_db.attach_prompt_db(conn, resolve_prompt_db_path(db_path, prompt_db_path))
+    finally:
+        conn.close()
 
 
 def db_exists(db_path: str) -> bool:
@@ -78,7 +106,7 @@ def _prompt_assets_cte() -> str:
                     PARTITION BY pa.pixiv_illust_id
                     ORDER BY pa.imported_at DESC, pa.local_path ASC
                 ) AS rn
-            FROM prompt_assets pa
+            FROM pdb.prompt_assets pa
             WHERE pa.pixiv_illust_id IS NOT NULL
         )
     """
@@ -89,8 +117,9 @@ def load_posts_with_latest_snapshot(
     account_id: str,
     limit: int = 200,
     post_type: str = "ALL",
+    prompt_db_path: Optional[str] = None,
 ) -> pd.DataFrame:
-    conn = _connect(db_path)
+    conn = _connect_with_prompts(db_path, prompt_db_path)
     try:
         where_parts = []
         params = []
@@ -163,8 +192,9 @@ def load_post_snapshots(
     db_path: str,
     account_id: str,
     illust_id: int,
+    prompt_db_path: Optional[str] = None,
 ) -> pd.DataFrame:
-    conn = _connect(db_path)
+    conn = _connect_with_prompts(db_path, prompt_db_path)
     try:
         return pd.read_sql_query(
             f"""
@@ -175,7 +205,7 @@ def load_post_snapshots(
                         PARTITION BY pa.account_id, pa.illust_id
                         ORDER BY pa.imported_at DESC, pa.local_path ASC
                     ) AS rn
-                FROM prompt_assets pa
+                FROM pdb.prompt_assets pa
             )
             SELECT
                 ps.account_id,
@@ -221,6 +251,7 @@ def load_growth_benchmark(
     post_type: str = "ALL",
     tolerance_hours: float = 6.0,
     limit: int = 300,
+    prompt_db_path: Optional[str] = None,
 ) -> pd.DataFrame:
     metric_map = {
         "bookmark_count": "ps.bookmark_count",
@@ -230,7 +261,7 @@ def load_growth_benchmark(
     }
     metric_col = metric_map.get(metric, "ps.bookmark_count")
 
-    conn = _connect(db_path)
+    conn = _connect_with_prompts(db_path, prompt_db_path)
     try:
         where_parts = [f"{metric_col} IS NOT NULL"]
         params: list = []

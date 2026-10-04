@@ -19,7 +19,7 @@ def _make_png(path: Path, prompt: str, illust_id: int) -> None:
 def test_import_prompt_assets_reads_png_metadata(tmp_path):
     db_path = tmp_path / 'test.db'
     conn = db.connect_db(str(db_path))
-    db.init_db(conn)
+    db.init_prompt_db(conn)
 
     root = tmp_path / 'assets' / 'main'
     root.mkdir(parents=True)
@@ -46,7 +46,7 @@ def test_import_prompt_assets_reads_png_metadata(tmp_path):
 def test_import_prompt_assets_extracts_comfyui_prompt_text(tmp_path):
     db_path = tmp_path / 'test.db'
     conn = db.connect_db(str(db_path))
-    db.init_db(conn)
+    db.init_prompt_db(conn)
 
     root = tmp_path / 'assets' / 'akira'
     root.mkdir(parents=True)
@@ -89,7 +89,7 @@ def test_import_prompt_assets_extracts_comfyui_prompt_text(tmp_path):
 def test_import_prompt_assets_can_derive_id_from_relative_path(tmp_path):
     db_path = tmp_path / 'test.db'
     conn = db.connect_db(str(db_path))
-    db.init_db(conn)
+    db.init_prompt_db(conn)
 
     root = tmp_path / 'assets' / 'wakame'
     root.mkdir(parents=True)
@@ -121,7 +121,7 @@ def test_import_prompt_assets_can_derive_id_from_relative_path(tmp_path):
 def test_import_prompt_assets_can_include_promptless_image(tmp_path):
     db_path = tmp_path / 'test.db'
     conn = db.connect_db(str(db_path))
-    db.init_db(conn)
+    db.init_prompt_db(conn)
 
     root = tmp_path / 'assets' / 'wakame'
     root.mkdir(parents=True)

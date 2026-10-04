@@ -23,6 +23,8 @@ from ui.data_access import (
     load_growth_benchmark,
     load_post_snapshots,
     load_posts_with_latest_snapshot,
+    prompt_db_available,
+    resolve_prompt_db_path,
 )
 from ui.transform import (
     add_follower_delta,
@@ -48,6 +50,12 @@ def _ui_tz() -> str:
 with st.sidebar:
     st.header("Filters")
     db_path = st.text_input("DB Path", value=_default_db_path())
+    prompt_db_path = st.text_input(
+        "Prompt DB Path (local only)",
+        value=resolve_prompt_db_path(db_path),
+    )
+    if not prompt_db_available(db_path, prompt_db_path):
+        st.caption("Prompt DB not found: prompt columns will be empty.")
 
 if not db_exists(db_path):
     st.error(f"DB file not found: {db_path}")
@@ -98,6 +106,7 @@ posts_df = load_posts_with_latest_snapshot(
     account_id=selected_account,
     limit=300,
     post_type=post_type,
+    prompt_db_path=prompt_db_path,
 )
 posts_df = parse_tags_json(posts_df)
 
@@ -123,6 +132,7 @@ else:
         db_path,
         account_id=selected_row["account_id"],
         illust_id=int(selected_row["illust_id"]),
+        prompt_db_path=prompt_db_path,
     )
     curve_df = to_elapsed_hours_curve(snap_df)
     metric_df = safe_metric_series(curve_df, metric)
@@ -156,6 +166,7 @@ growth_compare_df = load_growth_benchmark(
     metric=benchmark_metric,
     post_type=post_type,
     tolerance_hours=float(tolerance_hours),
+    prompt_db_path=prompt_db_path,
     limit=300,
 )
 growth_compare_df = parse_tags_json(growth_compare_df)

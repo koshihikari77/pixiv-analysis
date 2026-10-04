@@ -43,7 +43,26 @@ uv run --project /home/inada/03_projects/pixiv-analysis streamlit run /home/inad
 - 用途: UI を起動する
 
 ```bash
-uv run --project /home/inada/03_projects/pixiv-analysis pytest
+cd /home/inada/03_projects/pixiv-analysis && uv run --with-requirements requirements-dev.txt python -m pytest
 ```
 
 - 用途: テストを実行する
+
+## ローカル prompt DB（`data/prompt_assets.db`、git 管理外）
+
+repo ルートで実行する（既定パスが相対 `data/prompt_assets.db` のため）。`pixiv_stats.db` には書かない。
+
+```bash
+cd /home/inada/03_projects/pixiv-analysis
+uv run python import_prompts.py --root /home/inada/03_projects/pixiv/akira --account-id akira
+uv run python import_prompts.py --root /home/inada/03_projects/pixiv/wakame --account-id wakame \
+  --extensions png,jpg --derive-missing-id --include-promptless
+uv run python apply_prompt_links.py --json-path data/prompt_post_links.main.json \
+  --asset-account-id wakame --prompt-root /home/inada/03_projects/pixiv/wakame
+uv run python apply_prompt_links.py --json-path data/prompt_post_links.sub2.json \
+  --asset-account-id akira --prompt-root /home/inada/03_projects/pixiv/akira
+```
+
+- 用途: prompt DB を取り込み・リンク適用する（再実行しても upsert なので冪等）
+- 別パスに置く: `PROMPT_DB_PATH=/path/to/prompt_assets.db` または `--prompt-db-path`
+- `apply_prompt_links.py` は JSON の画像パスが実在しないとエラーで止まる（`local_images path is not an image` / `did not match any file`）。JSON を直すのが正規対応
